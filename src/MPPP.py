@@ -1,7 +1,7 @@
 # MPPP functions
 
 '''
-future work: define an image class
+
 '''
 
 import numpy as np
@@ -17,7 +17,7 @@ import os
 class image:
     
     '''
-    The image class holds all parameters specific to a IMG file
+    The image class holds all parameters specific to the IMG file
     '''
 
     def __init__(self, IMG_path ):
@@ -28,6 +28,7 @@ class image:
         self.image       = np.float32( PDS3Image.open( IMG_path ).image )    # three band float-32 image array
         self.mask_image  = np.ones( self.image.shape[:2] )*255               # one band boolian image array
         self.cam         = self.filename[:2]
+        self.sol         = int( self.filename[4:8] )
         
         # int to float scaling factor
         self.scale       = self.label['DERIVED_IMAGE_PARMS']['RADIANCE_SCALING_FACTOR'][0]
@@ -90,6 +91,10 @@ class image:
                     self.pad_bottom = self.full_height - self.label['MINI_HEADER']['LINES']             - self.label['MINI_HEADER']['FIRST_LINE']         + 1
 
                     if self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0:
+                        
+                        print( 'resizing image size {} by padding = [ left, right, top, bottom ] = [ {}, {}, {}, {} ]'.format( \
+                            self.image.shape, self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ))
+                        
                         self.im = pad_image( self.image, pad = [ self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ] )
 
         
@@ -148,10 +153,17 @@ class image:
                     self.pad_right  = self.full_width  - np.max(self.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE_SAMPLE']) - 1280 + 1
                     self.pad_top    =                    np.min(self.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE'])        - 1
                     self.pad_bottom = self.full_height - np.max(self.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE'])        - 960  + 1
-
+                    
                     if self.pad_right < 0: self.pad_right = 0
-
+                    if self.pad_bottom < 0: self.pad_bottom = 0
+                    
+                    
+                    
                     if self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0:
+                        
+                        print( 'resizing image size {} by padding = [ left, right, top, bottom ] = [ {}, {}, {}, {} ]'.format( \
+                            self.image.shape, self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ))
+                        
                         self.im = pad_image( self.im, pad = [self.pad_left,self.pad_right,self.pad_top,self.pad_bottom] )
 
 
@@ -159,10 +171,7 @@ class image:
 
         self.mask_im = self.mask_image.copy() 
 
-        if ( self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0 ) and pad_im:
-
-            print( 'resizing image size {} by padding = [ left, right, top, bottom ] = [ {}, {}, {}, {} ]'.format( \
-                    self.image.shape, self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ))    
+        if ( self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0 ) and self.pad_im:
 
             self.mask_im = pad_image( self.mask_im, pad = [ self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ] )
 
@@ -283,7 +292,19 @@ class image:
                 self.Z_offset += self.z_shift
         
     def find_tau( self ):
-        self.tau = 0.6
+        
+        '''
+        return the tau, the opacity of Mars sky at the time of the image
+        
+        future work:
+        * access the M2020 tau record
+        * estimate the tue for the specific sol
+        '''
+        
+        self.tau = 0.8
+        
+        if self.sol >=700:
+            self.tau = 0.5
 
     
 
@@ -380,10 +401,10 @@ def plot_image_locations( IMG_paths, im_xyzs, rover_xyzs, rover_rots, im_azs, im
 
             if os.path.basename( IMG_paths[i] )[0]=='Z':
                 plt.arrow( im_xyzs[i][0], im_xyzs[i][1], scale*cos_el*sin_az, scale*cos_el*cos_az,
-                           color=marker[1], lw = int(scale/16), linestyle='dashed' )
+                           color=marker[1], lw = int(scale/32), linestyle='dashed' )
             else:
                 plt.arrow( im_xyzs[i][0], im_xyzs[i][1], scale*cos_el*sin_az, scale*cos_el*cos_az,
-                           color=marker[1], lw = int(scale/16) )
+                           color=marker[1], lw = int(scale/32) )
                 
         plt.plot( im_xyzs[i][0], im_xyzs[i][1], marker )
         
