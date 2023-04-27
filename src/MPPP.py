@@ -265,9 +265,10 @@ class image:
                 self.rot       = 57.3*np.float32( self.label['RSM_ARTICULATION_STATE']['ARTICULATION_DEVICE_ANGLE'][0][0] )
                 self.rot_rover = (self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
 
-            self.q = self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-            self.q = [ self.q[1], self.q[2], self.q[3], self.q[0]]
-            self.Cr = R.from_quat( self.q ).apply( self.C, inverse=0 )
+            self.q   = self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
+            self.q   = [ self.q[1], self.q[2], self.q[3], self.q[0]]
+            self.Rot = R.from_quat( self.q )
+            self.Cr  =  self.Rot.apply( self.C, inverse=0 )
 
             self.xyz_rover = self.xyz.copy()
 
