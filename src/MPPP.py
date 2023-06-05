@@ -80,7 +80,6 @@ class image:
         if self.filename[0] == 'Z':
 
             
-            
             # pad Mastcam-Z images for th non-standard sizes
 
             self.pad_left,self.pad_right,self.pad_top,self.pad_bottom = [0,0,0,0]
@@ -174,7 +173,6 @@ class image:
 
 
         # make image mask
-
         self.mask_im = self.mask_image.copy() 
 
         if ( self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0 ) and self.pad_im:
@@ -193,8 +191,8 @@ class image:
             self.mask_im[ self.image[:,:,1] ==0 ] = 0
 
         # Mars2020 Mastcam-Z mask processing    
-        if self.filename[0] in [ 'Z', 'S']:                
-
+        if self.filename[0] in [ 'Z', 'S']:
+            
             self.mask_im[ :4,  :] = 0
             self.mask_im[ -1:, :] = 0
             self.mask_im[ : ,:24] = 0
@@ -202,6 +200,18 @@ class image:
             
             if 'IOF_N' in self.filename:
                 self.ftau = 1.0
+                
+            # use pre-saved mask
+            parent_path  = os.path.split( os.getcwd() )[0]
+            if self.filename[:2] == 'ZL':
+                mask_path = os.path.join( parent_path, 'params/ZL.jpg' )
+            if self.filename[:2] == 'ZR':
+                mask_path = os.path.join( parent_path, 'params/ZL.jpg' )
+            else:
+                mask_path = os.path.join( parent_path, 'params/S.jpg' )
+            mask = cv2.imread( mask_path )
+            self.mask_im[ mask[:,:,0] < 100 ] = 0
+               
 
         # Mars2020 SuperCam RMI mask processing        
         if self.filename[0] == 'L':
@@ -217,6 +227,30 @@ class image:
             self.mask_im[ -1:, :] = 0
             self.mask_im[ :, :2 ] = 0
             self.mask_im[ :,-2: ] = 0
+            
+            
+            # use pre-saved mask
+            if self.filename[0] == 'F':
+            
+                parent_path  = os.path.split( os.getcwd() )[0]
+                if self.filename[:2] == 'FL':
+                    mask_path = os.path.join( parent_path, 'params/FL{}.jpg'.format(self.down_sample) )
+                else:
+                    mask_path = os.path.join( parent_path, 'params/FR{}.jpg'.format(self.down_sample) )
+                
+                mask = cv2.imread( mask_path )
+                self.mask_im[ mask[:,:,0] < 100 ] = 0
+                
+            if 'MV0' in self.filename or 'M_0' in self.filename:
+            
+                parent_path  = os.path.split( os.getcwd() )[0]
+                if self.filename[:2] == 'NL':
+                    mask_path = os.path.join( parent_path, 'params/NL2_vce.jpg' )
+                else:
+                    mask_path = os.path.join( parent_path, 'params/NR2_vce.jpg' )
+                
+                mask = cv2.imread( mask_path )
+                self.mask_im[ mask[:,:,0] < 100 ] = 0
 
             
             
@@ -504,7 +538,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
     pad_im_z   = 1
 
     # turn on when finding the waypoint offsets
-    #find_offsets_mode = 0
+#     find_offsets_mode = 1
 
     # set the color values
     gamma      = 2.2      # gamma value
@@ -525,7 +559,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
 
     # color balance parameters for the Mars 2020 engineering cameras
     scale_n,  scale_red_n,  scale_blue_n  = [ 1.0*scale_scale, 0.75, 1.2  ] # Navcam
-    scale_v,  scale_red_v,  scale_blue_v  = [ 1.2*scale_scale, 1.10, 0.93 ] # Grayscale VCE Navcam
+    scale_v,  scale_red_v,  scale_blue_v  = [ 1.3*scale_scale, 1.10, 0.93 ] # Grayscale VCE Navcam
     scale_f,  scale_red_f,  scale_blue_f  = [ 1.1*scale_scale, 0.78, 1.25 ] # Front Hazcam
     scale_r,  scale_red_r,  scale_blue_r  = [ 1.1*scale_scale, 0.78, 1.25 ] # Rear Hazcam
     scale_hr, scale_red_hr, scale_blue_hr = [ 1.0*scale_scale, 0.75, 1.43 ] # Inginuity RTE
@@ -599,12 +633,15 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
                 im.scale_red   = scale_red_n
                 im.scale_blue  = scale_blue_n
 
+                
+                
             # Mars 2020 Navcam VCE images
-            if 'MV0' in im.IMG_path:
+            if 'MV0' in im.filename or 'M_0' in im.filename:
                 im.scale       = scale_v
                 im.scale_red   = scale_red_v
                 im.scale_blue  = scale_blue_v
                 im.clip_low    = 0.1
+
 
             # Mars 2020 Front Hazcam
             if im.cam[0] == 'F':
@@ -688,8 +725,8 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
             print( )
 
         except:
-            print( im.filename, 'failed to process! \n' )
-            error_lines.append( im.IMG_path +'\n' )
+            print( os.path.basename( IMG_paths[i]), 'failed to process! \n' )
+            error_lines.append( os.path.basename( IMG_paths[i]) +'\n' )
 
 
     current_time = time.strftime("%Y%m%d-%H%M%S")
@@ -697,16 +734,18 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
 
     #save failed images list as TXT
     if len(error_lines) > 0:
-        csv_save_path = im.save_path+'/failed_'+suf+'_'+current_time+'.txt'
+        csv_save_path = os.path.dirname( csv_save_path)+'/failed_'+suf+'_'+current_time+'.txt'
         with open(csv_save_path,'w') as file:
             for error_line in error_lines:
                 file.write(error_line)
+    print( 'saved', csv_save_path )
 
     #save image positions as CSV file
-    csv_save_path = im.save_path+'/positions_'+suf+'_'+current_time+ '.txt'
+    csv_save_path = os.path.dirname( csv_save_path)+'/positions_'+suf+'_'+current_time+ '.txt'
     with open(csv_save_path,'w') as file:
         for pos_line in pos_lines:
             file.write(pos_line)
+    print( 'saved', csv_save_path )
 
     len( pos_lines )
     
