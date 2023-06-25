@@ -17,8 +17,6 @@ import cv2
 import time
 import glob
 
-from numpy.linalg import inv, norm, det
-
 
 class image:
     
@@ -39,17 +37,6 @@ class image:
         # int to float scaling factor
         self.scale       = self.label['DERIVED_IMAGE_PARMS']['RADIANCE_SCALING_FACTOR'][0]
         self.image      *= self.scale
-        
-        self.find_offsets_mode = None
-        
-        try:
-            self.site  = int( self.label['ROVER_MOTION_COUNTER'][0] )
-            self.drive = int( self.label['ROVER_MOTION_COUNTER'][1] )
-            self.LMST  = self.label['LOCAL_MEAN_SOLAR_TIME'].split('M')[1]
-        except:
-            self.site  = 0
-            self.drive = 0
-            self.LMST  = 0
 
 
     def image_process( self ):
@@ -70,10 +57,7 @@ class image:
 
 
         d  = 57.296
-        try:
-            self.mu = np.sin( self.label['SITE_DERIVED_GEOMETRY_PARMS']['SOLAR_ELEVATION'][0]/d )
-        except:
-            self.mu = 1.0
+        self.mu = np.sin( self.label['SITE_DERIVED_GEOMETRY_PARMS']['SOLAR_ELEVATION'][0]/d )
 
         self.find_tau()
 
@@ -146,9 +130,9 @@ class image:
         # Ingenuity Navcam color processing
         elif self.filename[0:3] == 'HNM':
             self.ftau = 1.0
-#             w = 50
-#             self.im /= np.percentile( im[w:-w,w:-w,:], 99.95 )*1.0
-#             clip_low = np.percentile( im[w:-w,w:-w,:], 0.01 )*1.0
+            # w = 40
+            # im /= np.percentile( im[w:-w,w:-w,:], 99.95 )*1.0
+            # clip_low = np.percentile( im[w:-w,w:-w,:], 0.01 )*1.0
 
 
         # Mars2020 SHERLOC WATSON color processing
@@ -186,6 +170,7 @@ class image:
                             self.image.shape, self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ))
                         
                         self.im = pad_image( self.im, pad = [self.pad_left,self.pad_right,self.pad_top,self.pad_bottom] )
+
 
         # make image mask
         self.mask_im = self.mask_image.copy() 
@@ -235,15 +220,6 @@ class image:
             self.mask_im[1800:,:,:] = 0
             self.mask_im = cv2.blur( self.mask_im, (20,20))
             self.mask_im[ self.mask_im<255]=0 
-            
-            
-        if self.filename[:3] == 'HNM':
-
-            parent_path  = os.path.split( os.getcwd() )[0]
-            mask_path = os.path.join( parent_path, 'params/HNM.jpg' )
-            mask = cv2.imread( mask_path )
-            self.mask_im[ mask[:,:,0] < 100 ] = 0
-            
 
         # Mars2020 Ecam mask processing    
         else:             
@@ -274,15 +250,8 @@ class image:
                     mask_path = os.path.join( parent_path, 'params/NR2_vce.jpg' )
                 
                 mask = cv2.imread( mask_path )
-                self.mask_im[ mask[:,:,0] < 100 ] = 0       
-            
-            
-        if self.filename[:3] == 'HNM' and 1:
-           
-            im_max = np.max( self.im )
-            for i in range(3):
-                self.im[:,:,i] = cv2.equalizeHist( np.uint8( self.im[:,:,i] * 255 / im_max )  ).astype('float') / 255 * im_max / self.scale_red
-            self.clip_low = 0
+                self.mask_im[ mask[:,:,0] < 100 ] = 0
+
             
             
         # apply color and brightnesss corrections
@@ -301,152 +270,70 @@ class image:
         # rescale image to 8 unsigned bits
         self.im8 = np.clip( 255*self.im, 0, 255 ).astype('uint8')
         
-        
-        
-        
         # print( 'processed image', self.filename)
 
 
 
-#     def image_reference_perseverance( self ):
-
-#             '''
-#             future work: move exterior camera calculations to separate function
-#             '''
-
-#             self.az    = self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'  ][0]
-#             self.el    = self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_ELEVATION'][0]
-#             self.xyz   = np.array( self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'].copy() )
-#             self.C     = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'].copy()
-#             self.el   += 90
-#             self.rl    = 0
-#             if self.filename[:2]=='FL': self.rl = + 10
-#             if self.filename[:2]=='FR': self.rl = - 10
+    def image_reference( self ):
 
 
-# #             try: 
-# #                 self.rot       = 57.3*np.float32( self.label['RSM_ARTICULATION_STATE']['ARTICULATION_DEVICE_ANGLE'][0] )
-# #                 self.rot_rover = (self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
-# #             except: 
-#             self.rot       = 57.3*np.float32( self.label['RSM_ARTICULATION_STATE']['ARTICULATION_DEVICE_ANGLE'][0][0] )
-#             self.rot_rover = ( self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - 
-#                                self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
-
-#             self.q   = self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-#             self.q   = [ self.q[1], self.q[2], self.q[3], self.q[0]]
-#             self.Rot = R.from_quat( self.q )
-#             self.Cr  =  self.Rot.apply( self.C, inverse=0 )
-
-#             self.xyz_rover = self.xyz.copy()
+            '''
+            future work: move exterior camera calculations to separate function
+            '''
 
 
-#             self.xyz[0] += self.Cr[0]
-#             self.xyz[1] += self.Cr[1]
-#             self.xyz[2] += self.Cr[2]
-
-#             self.X =  self.xyz[1]
-#             self.Y =  self.xyz[0]
-#             self.Z = -self.xyz[2]
-
-#             self.X_offset =  self.xyz_rover[1]
-#             self.Y_offset =  self.xyz_rover[0]
-#             self.Z_offset = -self.xyz_rover[2]
+            self.az    = self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'  ][0]
+            self.el    = self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_ELEVATION'][0]
+            self.xyz   = np.array( self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'].copy() )
+            self.C     = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'].copy()
+            self.el   += 90
+            self.rl    = 0
+            if self.filename[:2]=='FL': self.rl = + 10
+            if self.filename[:2]=='FR': self.rl = - 10
 
 
-#             self.x_shift, self.y_shift, self.z_shift = xyz_shift_offsets( self.site, self.drive )
+            try: 
+                self.rot       = 57.3*np.float32( self.label['RSM_ARTICULATION_STATE']['ARTICULATION_DEVICE_ANGLE'][0] )
+                self.rot_rover = (self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
+            except: 
+                self.rot       = 57.3*np.float32( self.label['RSM_ARTICULATION_STATE']['ARTICULATION_DEVICE_ANGLE'][0][0] )
+                self.rot_rover = (self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
 
-#             if 1 and self.find_offsets_mode==0:
-#                 self.X += self.x_shift
-#                 self.Y += self.y_shift
-#                 self.Z += self.z_shift
-#                 self.X_offset += self.x_shift
-#                 self.Y_offset += self.y_shift
-#                 self.Z_offset += self.z_shift
-                
-                
-#     def image_reference_ingenuity( self ):
+            self.q   = self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
+            self.q   = [ self.q[1], self.q[2], self.q[3], self.q[0]]
+            self.Rot = R.from_quat( self.q )
+            self.Cr  =  self.Rot.apply( self.C, inverse=0 )
 
-
-#         '''
-        
-        
-#         camera pos in M frame = camera model.MODEL_COMPONENT_1
-#         camera pos in G frame = camera pos in M frame * M to G quat + M to G offset
-#         camera pos in Site3 frame = camera pos in G frame * G to Site3 quat + G to Site3 offset
+            self.xyz_rover = self.xyz.copy()
 
 
-#         '''
+            self.xyz[0] += self.Cr[0]
+            self.xyz[1] += self.Cr[1]
+            self.xyz[2] += self.Cr[2]
 
+            self.X =  self.xyz[1]
+            self.Y =  self.xyz[0]
+            self.Z = -self.xyz[2]
 
-#         self.az    = 0
-#         self.el    = 0
-#         self.rl    = 0
-#         self.rot   = 0 
-#         self.rot_rover = 0
-        
-               
-#         self.C    = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'].copy()
+            self.X_offset =  self.xyz_rover[1]
+            self.Y_offset =  self.xyz_rover[0]
+            self.Z_offset = -self.xyz_rover[2]
 
-#         self.q   = self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-#         self.q   = [ self.q[1], self.q[2], self.q[3], self.q[0]]
-#         self.Rot = R.from_quat( self.q )
-#         self.Cr  = self.Rot.apply( self.C, inverse=0 )
-        
-#         self.Cr += np.array( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'].copy() )
-        
-#         self.q   = self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-#         self.q   = [ self.q[1], self.q[2], self.q[3], self.q[0]]
-#         self.Rot = R.from_quat( self.q )
-#         self.Cr  = self.Rot.apply( self.Cr, inverse=0 )
-                
-#         self.Cr += np.array( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'].copy() )
-        
-           
-#         self.xyz_veh = self.Cr.copy()
-        
-#         self.q_NED2ENU = R.from_quat( [1,1,0,0] )
+            self.sol     = int( self.label['LOCAL_TRUE_SOLAR_TIME_SOL'] )
+            self.site    = int( self.label['ROVER_MOTION_COUNTER'][0] )
+            self.drive   = int( self.label['ROVER_MOTION_COUNTER'][1] )
 
-#         self.X, self.Y, self.Z = self.q_NED2ENU.apply( self.Cr, inverse=0 )
-        
-#         self.X_offset, self.Y_offset, self.Z_offset = self.q_NED2ENU.apply( self.xyz_veh, inverse=0 )
-        
-        
+            self.LMST = self.label['LOCAL_MEAN_SOLAR_TIME'].split('M')[1]
 
-#         self.A = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_2']
+            self.x_shift, self.y_shift, self.z_shift = xyz_shift_offsets( self.site, self.drive )
 
-#         self.q_A = R.from_quat( self.A + [0] )
-#         self.q_A = R.from_quat( [0,0,0,1] )
-
-
-# #         if self.filename[0:3] == 'HSF':
-# #             self.q_A = self.q_A * R.from_euler('zyx', np.array([90, 45, 0]), degrees=True)
-# #         if self.filename[0:3] == 'HNM':
-# #             self.q_A = self.q_A * R.from_euler('zyx', np.array([0, 0, 0]), degrees=True)
-
-
-#         self.q   = self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-#         self.q_M = R.from_quat( [ self.q[1], self.q[2], self.q[3], self.q[0]] )
-
-#         self.q   = self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'].copy()
-#         self.q_G = R.from_quat( [ self.q[1], self.q[2], self.q[3], self.q[0]] )
-
-#         self.q_T = self.q_A * self.q_G * self.q_M
-# #         self.q_T = self.q_A * self.q_G * self.q_M * self.q_NED2ENU
-
-
-#         self.ypr = self.q_T.as_euler('zyx', degrees=True)
-    
-#         self.az  = ( 180 + self.ypr[0] ) % 360        
-#         self.el  = 0
-#         self.rl  = 0
-        
-#         self.rot_rover = self.az
-
-# #         print( self.ypr )
-
-
-
-                
+            if 1 and self.find_offsets_mode==0:
+                self.X += self.x_shift
+                self.Y += self.y_shift
+                self.Z += self.z_shift
+                self.X_offset += self.x_shift
+                self.Y_offset += self.y_shift
+                self.Z_offset += self.z_shift
         
     def find_tau( self ):
         
@@ -463,184 +350,7 @@ class image:
 #         if self.sol >=700:
 #             self.tau = 0.5
 
-
-    # Cmod
     
-    def image_reference( self ):
-        
-        
-        GEOMETRIC_CAMERA_MODEL = self.label['GEOMETRIC_CAMERA_MODEL']
-        self.cmod_from_cahvor( GEOMETRIC_CAMERA_MODEL )       
-        
-        if self.filename[0] == 'H':
-            self.find_Rt_veh2site_inginuity( )
-        else:
-            self.find_Rt_veh2site_perseverance( )
-        
-        self.R_cam2ned  = R.from_matrix( [[0,-1,0],[1,0,0],[0,0,1]] ) 
-        self.R_site2cam = self.R_cam2ned * self.R_veh2cam * self.R_veh2site.inv()
-        self.ypr = find_ypr_from_R( self.R_site2cam  )    
-        self.yaw, self.pitch, self.roll = self.ypr
-        self.az, self.el = find_azel_from_ypr( self.ypr  )
-
-        
-    
-        
-        
-    def cmod_from_cahvor( self, GEOMETRIC_CAMERA_MODEL ):
-        
-                   
-        self.C  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_1'], dtype=np.float64 )
-        self.A  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_2'], dtype=np.float64 )
-        self.H  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_3'], dtype=np.float64 )
-        self.V  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_4'], dtype=np.float64 )
-        self.O  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_5'], dtype=np.float64 )
-        self.R  = np.array(  GEOMETRIC_CAMERA_MODEL['MODEL_COMPONENT_6'], dtype=np.float64 )
-
-        self.hs = norm( np.cross( self.H, self.A ) )
-        self.vs = norm( np.cross( self.V, self.A ) )
-        self.hc = np.dot( self.H, self.A ) 
-        self.vc = np.dot( self.V, self.A ) 
-
-        self.hp = ( self.H - self.hc* self.A ) / self.hs
-        self.vp = ( self.V - self.vc* self.A ) / self.vs
-
-        self.theta = np.arcsin( ( - norm( np.cross( self.vp, self.hp ) )
-                                  / norm( self.vp )
-                                  / norm( self.hp ) ) )
-        self.theta_degrees = np.rad2deg( self.theta )
-        
-        self.K_cam = np.array([
-                    [ -self.hs*np.sin(self.theta), self.hs*np.cos(self.theta), self.hc ],
-                    [                           0,                    self.vs, self.vc ],
-                    [                           0,                          0,       1 ], ])
-
-        self.rot_cam = np.matmul( inv( self.K_cam ), 
-                                  np.array( [ self.H, self.V, self.A ] ) )
-        
-        self.R_cam = R.from_matrix( self.rot_cam )       
-        self.R_veh2cam = self.R_cam
-        
-        self.R_ned2enu = R.from_matrix( [[0,1,0],[1,0,0],[0,0,-1]] )
-        
-        self.w, self.h = [ self.label['IMAGE']['LINE_SAMPLES'], self.label['IMAGE']['LINES'] ]
-        if self.w==1600: self.w = 1648
-
-        self.k1 = self.R[1]
-        self.k2 = self.R[2]
-        self.k3 = 0
-
-        self.p1 = 0
-        self.p2 = 0        
-        
-        self.cxp = self.hc - self.w/2
-        self.cyp = self.vc - self.h/2
-        
-        self.f  =  self.vs
-        self.b1 = -self.hs * np.sin( self.theta ) - self.vs
-        self.b2 =  self.hs * np.cos( self.theta )
-        
-    
-    def find_Rt_veh2site_inginuity( self ):
-        
-        self.az       = 0
-        self.az_veh   = 0
-        self.C = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'].copy()
-
-        self.q_HELI_M = q_wxyz2xyzw( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
-        self.R_HELI_M = R.from_quat( self.q_HELI_M )
-        self.C_HELI_M = self.R_HELI_M.apply( self.C, inverse=0 ) \
-                      + np.array( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
-                        
-        self.q_HELI_G = q_wxyz2xyzw( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
-        self.R_HELI_G = R.from_quat( self.q_HELI_G )
-        self.C_HELI_G = self.R_HELI_G.apply( self.C_HELI_M, inverse=0 ) \
-                      + np.array( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
-                 
-        self.xyz      = self.C_HELI_G.copy()
-         
-        self.xyz_veh  = self.C_HELI_G.copy()  # approximation
-
-        self.X, self.Y, self.Z = xyz_ned2enu( self.xyz )
-        self.X_offset, self.Y_offset, self.Z_offset = xyz_ned2enu( self.xyz_veh )        
-        
-        self.R_veh2site =  self.R_HELI_M * self.R_HELI_G
-        self.t_veh2site = -self.xyz_veh
-        
-        
-    def find_Rt_veh2site_perseverance( self ):
-        
-        self.az       = self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0]
-        self.az_veh = ( self.label['ROVER_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0] - 
-                           self.label['SITE_DERIVED_GEOMETRY_PARMS']['INSTRUMENT_AZIMUTH'][0])%360
-
-        self.q  = q_wxyz2xyzw( self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
-        self.R_veh = R.from_quat( self.q )
-        self.Cr =  self.R_veh.apply( self.C, inverse=0 )
-        
-        
-        self.xyz_veh = np.array( self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
-        
-        self.xyz = self.Cr + np.array( self.label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
-
-
-#         self.X =  self.xyz[1]
-#         self.Y =  self.xyz[0]
-#         self.Z = -self.xyz[2]
-
-#         self.X_offset =  self.xyz_veh[1]
-#         self.Y_offset =  self.xyz_veh[0]
-#         self.Z_offset = -self.xyz_veh[2]
-
-        self.X, self.Y, self.Z = xyz_ned2enu( self.xyz )
-        self.X_offset, self.Y_offset, self.Z_offset = xyz_ned2enu( self.xyz_veh )        
-
-        if not self.find_offsets_mode:
-            
-            self.X_shift, self.Y_shift, self.Z_shift = XYZ_shift_offsets( self.site, self.drive )
-            
-            self.X        += self.X_shift
-            self.Y        += self.Y_shift
-            self.Z        += self.Z_shift
-            self.X_offset += self.X_shift
-            self.Y_offset += self.Y_shift
-            self.Z_offset += self.Z_shift
-        
-        self.R_veh2site = self.R_veh
-        self.t_veh2site = self.xyz
-        
-                
-    
-def xyz_ned2enu( xyz ):
-    return np.array( [ xyz[1], xyz[0], -xyz[2] ] )
-        
-def q_wxyz2xyzw( q_wxyz ):
-     return np.array([ q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]] )
-        
-# def find_ypr_from_R( R_site2cam ):    
-#     R_cam2ned = R.from_matrix( [[0,-1,0],[1,0,0],[0,0,1]] )    
-#     angles = ( R_site2cam * R_cam2ned ).as_euler( 'zxy',degrees=1 )
-#     return np.array([ ( - angles[0] ) % 360, - angles[1], angles[2] ])
-
-def find_ypr_from_R( R_ ):  
-    return -(R_).as_euler('zyx',degrees=1)
-
-def find_R_from_ypr( ypr ):  
-    return R.from_euler( 'zyx', -ypr, degrees=1 )
-
-def find_azel_from_ypr( ypr ):   
-    return np.array([ ypr[0] % 360, ypr[1] - 90 ])
-    
-# def find_R_cam_from_ypr_veh( ypr, R_veh ):    
-#     R_cam2ned = R.from_matrix( [[0,-1,0],[1,0,0],[0,0,1]] ) 
-#     angles = [ -ypr[0], -ypr[1], ypr[2] ]
-#     return R.from_euler( 'zxy', angles, degrees=1 ) * R_cam2ned.inv() * R_veh
-
-# def find_R_cam_from_ypr( ypr ):    
-#     R_cam2ned = R.from_matrix( [[0,-1,0],[1,0,0],[0,0,1]] ) 
-#     angles = [ -ypr[0], -ypr[1], ypr[2] ]
-#     return R.from_euler( 'zxy', angles, degrees=1 ) * R_cam2ned.inv() 
-
 
 def pad_image( im, pad = [0,0,0,0] ):
     
@@ -755,10 +465,10 @@ def plot_image_locations( IMG_paths, im_xyzs, rover_xyzs, rover_rots, im_azs, im
 
 
 
-def XYZ_shift_offsets( site, drive ):
+def xyz_shift_offsets( site, drive ):
     
     '''
-    XYZ_shift_offsets finds most accurate Site-Nav offset for each site index and drive
+    xyz_shift_offsets finds most accurate Site-Nav offset for each site index and drive
     
     '''
 
@@ -785,11 +495,11 @@ def XYZ_shift_offsets( site, drive ):
         drive_site_shift = np.zeros(12)
 
     # print( drive_site_shift )
-    X_shift, Y_shift, Z_shift = drive_site_shift[9:]
+    x_shift, y_shift, z_shift = drive_site_shift[9:]
 
-    # X_shift, Y_shift, Z_shift = [ 0,0,0 ]
+    # x_shift, y_shift, z_shift = [ 0,0,0 ]
  
-    return X_shift, Y_shift, Z_shift
+    return x_shift, y_shift, z_shift
 
 
 def remove_duplicate_IMGs( IMG_paths ):
@@ -853,18 +563,19 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
     scale_f,  scale_red_f,  scale_blue_f  = [ 1.1*scale_scale, 0.78, 1.25 ] # Front Hazcam
     scale_r,  scale_red_r,  scale_blue_r  = [ 1.1*scale_scale, 0.78, 1.25 ] # Rear Hazcam
     scale_hr, scale_red_hr, scale_blue_hr = [ 1.0*scale_scale, 0.75, 1.43 ] # Inginuity RTE
-    scale_hn, scale_red_hn, scale_blue_hn = [ 1.0*scale_scale, 1.08 , 0.92 ] # Inginuity Navcam
+    scale_hn, scale_red_hn, scale_blue_hn = [ 1.0*scale_scale, 1.1 , 0.92 ] # Inginuity Navcam
     
-    pos_lines    = []
-    error_lines  = []
-    veh_XYZs     = []
-    im_XYZs      = []
-    veh_azs     = []
-    im_azs       = []
-    im_els       = []
-    sols         = []
-    rmcs         = []
-    ims          = []
+
+    pos_lines  = []
+    error_lines= []
+    rover_xyzs = []
+    im_xyzs    = []
+    rover_rots = []
+    im_azs     = []
+    im_els     = []
+    sols       = []
+    rmcs       = []
+    ims        = []
     im_save_path = ''
 
     print( len(IMG_paths), 'images\n')
@@ -872,9 +583,6 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
 
     for i in range(len(IMG_paths))[::][:]:
 
-        ####################################################
-        ################# *** debugging *** ################
-        ####################################################
 #         if 1:
         try:    # catch all the images that fail to process
 
@@ -960,14 +668,12 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
                 im.scale       = scale_hn
                 im.scale_red   = scale_red_hn
                 im.scale_blue  = scale_blue_hn
-                im.clip_low    = 0.4
-                
 
             # create save directory
             im.save_path_full = make_save_path( im.IMG_path, directory_output, fullpath=True, file_extension = '.png'  ) 
             im.save_path      = make_save_path( im.IMG_path, directory_output, fullpath=False ) 
             im.save_name      = im.save_path_full.split('/')[-1]
-            csv_save_path     = im.save_path_full
+            csv_save_path     = im.save_path
 
             # process and save image
             if im.save_im:
@@ -989,9 +695,9 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
             '''
             future work: replace these lists with pandas dataframes
             '''
-            im_XYZs   .append( [ im.X, im.Y, im.Z ] )
-            veh_XYZs.append( [ im.X_offset, im.Y_offset, im.Z_offset ] )
-            veh_azs.append( im.az_veh )
+            im_xyzs   .append( [ im.X, im.Y, im.Z ] )
+            rover_xyzs.append( [ im.X_offset, im.Y_offset, im.Z_offset ] )
+            rover_rots.append( im.rot_rover )
             im_azs    .append( im.az )
             im_els    .append( im.el )
             rmcs      .append( im.label['ROVER_MOTION_COUNTER'])
@@ -1003,9 +709,9 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
                          +str( np.round( im.X,4))+'\t'\
                          +str( np.round( im.Y,4))+'\t'\
                          +str( np.round( im.Z,4))+'\t'\
-                         +str( np.round( im.yaw,3))+'\t'\
-                         +str( np.round( im.pitch,3))+'\t'\
-                         +str( np.round( im.roll,3))+'\n'
+                         +str( np.round( im.az,2))+'\t'\
+                         +str( np.round( im.el,2))+'\t'\
+                         +str( np.round( im.rl,2))+'\n'
 
             pos_lines.append( pos_line )
 
@@ -1018,9 +724,6 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
             print( '', i, pos_line[:], )
             print( )
 
-        ####################################################
-        ################# *** debugging *** ################
-        ####################################################
         except:
             print( os.path.basename( IMG_paths[i]), 'failed to process! \n' )
             error_lines.append( os.path.basename( IMG_paths[i]) +'\n' )
@@ -1046,14 +749,14 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0 
 
     len( pos_lines )
     
-    plot_image_locations( IMG_paths, im_XYZs, veh_XYZs, veh_azs, im_azs, im_els )
+    plot_image_locations( IMG_paths, im_xyzs, rover_xyzs, rover_rots, im_azs, im_els )
     
     if find_offsets_mode:
         sites  = [ rmcs[i][0] for i in range(len(rmcs))[::-1] ]
         drives = [ rmcs[i][1] for i in range(len(rmcs))[::-1] ]
-        Xs     = [ veh_XYZs[i][0] for i in range(len(veh_XYZs))[::-1] ]
-        Ys     = [ veh_XYZs[i][1] for i in range(len(veh_XYZs))[::-1] ]
-        Zs     = [ veh_XYZs[i][2] for i in range(len(veh_XYZs))[::-1] ]
+        Xs     = [ rover_xyzs[i][0] for i in range(len(rover_xyzs))[::-1] ]
+        Ys     = [ rover_xyzs[i][1] for i in range(len(rover_xyzs))[::-1] ]
+        Zs     = [ rover_xyzs[i][2] for i in range(len(rover_xyzs))[::-1] ]
 
         table = np.stack( [sols[::-1], sites, drives, Xs, Ys, Zs], axis=1)
         np.round( table, 4 )
