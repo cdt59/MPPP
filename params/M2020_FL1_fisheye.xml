@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<calibration>
+  <projection>fisheye</projection>
+  <width>2560</width>
+  <height>1920</height>
+  <f>1074</f>
+  <cx>8</cx>
+  <cy>-5</cy>
+  <k1>0.001</k1>
+  <date>2023-06-30T19:51:37Z</date>
+</calibration>
