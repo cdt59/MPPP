@@ -419,26 +419,51 @@ class image:
         self.tilt     = 0
         self.az       = 0
         self.az_veh   = 0
-        self.C = self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'].copy()
+        self.C = np.array( self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'] ) - np.array( self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_TRANSFORM_VECTOR'] )
 
         self.q_HELI_M = q_wxyz2xyzw( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
         self.R_HELI_M = R.from_quat( self.q_HELI_M )
         self.C_HELI_M = self.R_HELI_M.apply( self.C, inverse=0 ) \
                       + np.array( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
+        
                         
         self.q_HELI_G = q_wxyz2xyzw( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
         self.R_HELI_G = R.from_quat( self.q_HELI_G )
         self.C_HELI_G = self.R_HELI_G.apply( self.C_HELI_M, inverse=0 ) \
                       + np.array( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
+        
+        R_HELI_takeoff = self.R_HELI_G.inv() * self.R_HELI_M
+        C_HELI_takeoff = R_HELI_takeoff.apply( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] ) 
+        
+#         print( "C_HELI_M", np.round( self.C_HELI_M,2), "C_HELI_takeoff", np.array( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] ) )
+        
+        
                  
         self.xyz      = self.C_HELI_G.copy()
-         
         self.xyz_veh  = self.C_HELI_G.copy()  # approximation
 
-        self.X, self.Y, self.Z = xyz_ned2enu( self.xyz )
-        self.X_offset, self.Y_offset, self.Z_offset = xyz_ned2enu( self.xyz_veh )        
+
+        self.X_shift, self.Y_shift, self.Z_shift = [0,0,0]
         
-        self.R_veh2site =  self.R_HELI_M * self.R_HELI_G
+#         if self.sol == 174:
+#             sclk       = int( self.filename[9:19])
+#             sclk_start = 682390500
+#             sclk_end   = 682390670
+#             sclk_inter = ( sclk - sclk_start ) / ( sclk_end - sclk_start )
+#             self.X_shift, self.Y_shift, self.Z_shift = sclk_inter * np.array( [5.449, -11.234, -0.408] )
+            
+            
+        self.X, self.Y, self.Z = xyz_ned2enu( self.xyz )
+        self.X_offset, self.Y_offset, self.Z_offset = xyz_ned2enu( self.xyz_veh )
+        
+        self.X        += self.X_shift
+        self.Y        += self.Y_shift
+        self.Z        += self.Z_shift
+        self.X_offset += self.X_shift
+        self.Y_offset += self.Y_shift
+        self.Z_offset += self.Z_shift
+        
+        self.R_veh2site =  self.R_HELI_G * self.R_HELI_M 
         self.t_veh2site = -self.xyz_veh
         
         
@@ -706,7 +731,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
     scale_scale = 18
 
     # color balance parameters for the Mars 2020 science cameras
-    scale_z,  scale_red_z,  scale_blue_z  = [ 1.0*scale_scale, 0.7 , 1.5  ] # Mastcam-Z 
+    scale_z,  scale_red_z,  scale_blue_z  = [ 1.1*scale_scale, 0.7 , 1.5  ] # Mastcam-Z 
     scale_l,  scale_red_l,  scale_blue_l  = [ 1.0*scale_scale, 0.75, 1.40 ] # SuperCam RMI
     scale_s,  scale_red_s,  scale_blue_s  = [ 1.0*scale_scale, 0.85, 1.40 ] # SHERLOC WATSON 
 
@@ -833,7 +858,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
                 im.scale       = scale_hn
                 im.scale_red   = scale_red_hn
                 im.scale_blue  = scale_blue_hn
-                im.clip_low    = 0.4
+                im.clip_low    = 0.3
                 
                 
             file_extension = '.png'
