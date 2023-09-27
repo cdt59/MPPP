@@ -50,9 +50,9 @@ class image:
             self.drive = int( self.label['ROVER_MOTION_COUNTER'][1] )
             self.LMST  = self.label['LOCAL_MEAN_SOLAR_TIME'].split('M')[1]
         except:
-            self.site  = 0
-            self.drive = 0
-            self.LMST  = 0
+            self.site  = -1
+            self.drive = -1
+            self.LMST  = -1
             
             
         if self.filename[0] == 'Z':
@@ -288,19 +288,22 @@ class image:
                 self.mask_im[ mask[:,:,0] < 100 ] = 0       
             
             
-        if self.filename[:3] == 'HNM' and 1:
-           
+        if self.filename[:3] == 'HNM' and 0:
             im_max = np.max( self.im )
-            for i in range(3):
-                self.im[:,:,i] = cv2.equalizeHist( np.uint8( self.im[:,:,i] * 255 / im_max )  ).astype('float') / 255 * im_max / self.scale_red
-            self.clip_low = 0
-            
+            self.im /= im_max
+#             for i in range(3):
+#                 self.im[:,:,i] = cv2.equalizeHist( np.uint8( self.im[:,:,i] * 255 / im_max )  ).astype('float') / 255 * im_max / self.scale_red
+#             self.clip_low = 0
             
         # apply color and brightnesss corrections
         self.im[:,:,0] *= self.scale / self.ftau * self.scale_red
         self.im[:,:,1] *= self.scale / self.ftau * 1
         self.im[:,:,2] *= self.scale / self.ftau * self.scale_blue
                 
+        if self.filename[:3] == 'HNM':
+            im_max = np.percentile( self.im, 99.9 )*1.01
+            self.im /= im_max
+            
         # apply clipping
         self.im = ( self.im - self.clip_low )/( 1 - self.clip_low )
         self.im = np.clip( self.im, 0, 1 )
@@ -411,7 +414,6 @@ class image:
         self.b2 =  self.hs * np.cos( self.theta )
         
         
-        
     
     def find_Rt_veh2site_inginuity( self ):
         
@@ -420,11 +422,17 @@ class image:
         self.az       = 0
         self.az_veh   = 0
         self.C = np.array( self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_COMPONENT_1'] ) - np.array( self.label['GEOMETRIC_CAMERA_MODEL']['MODEL_TRANSFORM_VECTOR'] )
+        
 
         self.q_HELI_M = q_wxyz2xyzw( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
         self.R_HELI_M = R.from_quat( self.q_HELI_M )
         self.C_HELI_M = self.R_HELI_M.apply( self.C, inverse=0 ) \
                       + np.array( self.label['HELI_M_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
+        
+        self.q_HELI_M = q_wxyz2xyzw( self.label['HELI_S2_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
+        self.R_HELI_M = R.from_quat( self.q_HELI_M )
+        self.C_HELI_M = self.R_HELI_M.apply( self.C, inverse=0 ) \
+                      + np.array( self.label['HELI_S2_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR'] )
         
                         
         self.q_HELI_G = q_wxyz2xyzw( self.label['HELI_G_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'] )
@@ -445,13 +453,26 @@ class image:
 
         self.X_shift, self.Y_shift, self.Z_shift = [0,0,0]
         
+        
+        #############################################################
+        #############################################################
+        #############################################################
+        
+#         if self.sol == 163:
+#             sclk       = int( self.filename[9:19])
+#             sclk_start = 681410896
+#             sclk_end   = 681411027
+#             sclk_inter = ( sclk - sclk_start ) / ( sclk_end - sclk_start )
+#             self.X_shift, self.Y_shift, self.Z_shift = sclk_inter * np.array( [-19.25, -10.63, 8.20] )
+            
 #         if self.sol == 174:
 #             sclk       = int( self.filename[9:19])
 #             sclk_start = 682390500
 #             sclk_end   = 682390670
 #             sclk_inter = ( sclk - sclk_start ) / ( sclk_end - sclk_start )
 #             self.X_shift, self.Y_shift, self.Z_shift = sclk_inter * np.array( [5.449, -11.234, -0.408] )
-            
+        
+#         print( self.X_shift, self.Y_shift, self.Z_shift )
             
         self.X, self.Y, self.Z = xyz_ned2enu( self.xyz )
         self.X_offset, self.Y_offset, self.Z_offset = xyz_ned2enu( self.xyz_veh )
@@ -608,10 +629,11 @@ def plot_image_locations( IMG_paths, im_xyzs, rover_xyzs, rover_rots, im_azs, im
             plt.plot( rover_xyzs[i][0], rover_xyzs[i][1], color='k',    marker=(4, 0, 45  + rover_rots[i]), ms=30, )
             plt.plot( rover_xyzs[i][0], rover_xyzs[i][1], color='gray', marker=(3, 0, 120 + rover_rots[i]), ms=20, )
         
-              
-            
-            plt.text( rover_xyzs[i][0]+scale/4, rover_xyzs[i][1]+scale/4, 'Sol '+ os.path.basename( IMG_paths[i] )[4:8], \
-                      bbox=dict(facecolor='w', alpha=0.5, edgecolor='w'), size='large' )
+            sol = os.path.basename( IMG_paths[i] )[4:8]
+            if i > 1:
+                if sol != os.path.basename( IMG_paths[i-1] )[4:8]:
+                    plt.text( rover_xyzs[i][0]+scale/4, rover_xyzs[i][1]+scale/4, 'Sol '+ sol, \
+                          bbox=dict(facecolor='w', alpha=0.5, edgecolor='w'), size='large' )
 
             if i>1 and os.path.basename( IMG_paths[i] )[:2]=='NLF_':
                 plt.plot( [rover_xyzs[i][0], rover_xyzs[i][1] ], [rover_xyzs[i][0], rover_xyzs[i][1] ], '--', color='gray' )
@@ -694,7 +716,7 @@ def remove_duplicate_IMGs( IMG_paths ):
             os.remove( duplicates_i_paths[j] )
             
             
-def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0, frame='site3' ):
+def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0, frame='site3', angles='opk' ):
     
     
     # File parameters    
@@ -742,12 +764,13 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
     scale_r,  scale_red_r,  scale_blue_r  = [ 1.1*scale_scale, 0.78, 1.25 ] # Rear Hazcam
     scale_hr, scale_red_hr, scale_blue_hr = [ 1.0*scale_scale, 0.75, 1.43 ] # Inginuity RTE
     scale_hn, scale_red_hn, scale_blue_hn = [ 1.0*scale_scale, 1.08 , 0.92 ] # Inginuity Navcam
+    scale_hn, scale_red_hn, scale_blue_hn = [ 1.2*scale_scale, 1.08 , 0.92 ] # Inginuity Navcam
     
     pos_lines    = []
     error_lines  = []
     veh_XYZs     = []
     im_XYZs      = []
-    veh_azs     = []
+    veh_azs      = []
     im_azs       = []
     im_els       = []
     sols         = []
@@ -831,6 +854,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
                 im.scale_red   = scale_red_v
                 im.scale_blue  = scale_blue_v
                 im.clip_low    = 0.1
+                im.gamma       = 1        # gamma already applied
 
 
             # Mars 2020 Front Hazcam
@@ -859,6 +883,7 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
                 im.scale_red   = scale_red_hn
                 im.scale_blue  = scale_blue_hn
                 im.clip_low    = 0.3
+                im.gamma       = 1        # gamma already applied
                 
                 
             file_extension = '.png'
@@ -938,15 +963,26 @@ def image_list_process( IMG_paths, directory_output, suf, find_offsets_mode = 0,
 #                  +str( np.round( im.pitch,4))+'\t'\
 #                  +str( np.round( im.roll, 4))+'\n'
 
-            # Label	 X/East	Y/North	Z/Altitude	Omega Phi Kappa  pan tilt
+            # choose Euler angle convention for export
+            if angles=='opk':
+                # Label	 X/East	Y/North	Z/Altitude	Omega Phi Kappa  pan tilt
+                angle_0, angle_1, angle_2 = [ im.omega, im.phi, im.kappa ]
+                
+            elif angles=='ypr':
+                # Label	 X/East	Y/North	Z/Altitude	Yaw Pitch Roll  pan tilt
+                angle_0, angle_1, angle_2 = [ im.yaw , im.pitch, im.roll  ]
+            else:
+                angle_0, angle_1, angle_2 = [ 0,0,0  ]
+                
+        
             pos_line =  im.save_name\
                      + '\t'\
                      + str( np.round( im.X    , 5))+'\t'\
                      + str( np.round( im.Y    , 5))+'\t'\
                      + str( np.round( im.Z    , 5))+'\t'\
-                     + str( np.round( im.omega, 5))+'\t'\
-                     + str( np.round( im.phi  , 5))+'\t'\
-                     + str( np.round( im.kappa, 5))+'\t'\
+                     + str( np.round( angle_0 , 5))+'\t'\
+                     + str( np.round( angle_1 , 5))+'\t'\
+                     + str( np.round( angle_2 , 5))+'\t'\
                      + str( np.round( im.pan  , 5))+'\t'\
                      + str( np.round( im.tilt , 5))+'\t'\
                      + str( np.round( im.focus_mc, 5))+'\t'\
