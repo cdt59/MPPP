@@ -83,9 +83,7 @@ class image:
             if 'MV' in self.filename or 'M_' in self.filename:
                 self.image = np.stack( [self.image,self.image,self.image], axis=-1)
             else:
-                # self.image = colour_demosaicing.demosaicing_CFA_Bayer_bilinear  ( self.image, 'RGGB' )
                 self.image = colour_demosaicing.demosaicing_CFA_Bayer_Malvar2004( self.image, 'RGGB' )
-                # self.image = colour_demosaicing.demosaicing_CFA_Bayer_Menon2007 ( im_.image, 'RGGB' )
 
 
         d  = 57.296
@@ -125,10 +123,10 @@ class image:
             if self.pad_im:
                 if self.im.shape != ( self.full_height, self.full_width, 3):                    
 
-                    self.pad_left   =                    self.label['MINI_HEADER']['FIRST_LINE_SAMPLE'] - 1
-                    self.pad_right  = self.full_width  - self.label['MINI_HEADER']['LINE_SAMPLES']      - self.label['MINI_HEADER']['FIRST_LINE_SAMPLE']  + 1
-                    self.pad_top    =                    self.label['MINI_HEADER']['FIRST_LINE']        - 1
-                    self.pad_bottom = self.full_height - self.label['MINI_HEADER']['LINES']             - self.label['MINI_HEADER']['FIRST_LINE']         + 1
+                    self.pad_left = self.label['MINI_HEADER']['FIRST_LINE_SAMPLE'] - 1
+                    self.pad_right  = self.full_width  - self.label['MINI_HEADER']['LINE_SAMPLES'] - self.label['MINI_HEADER']['FIRST_LINE_SAMPLE']  + 1
+                    self.pad_top = self.label['MINI_HEADER']['FIRST_LINE'] - 1
+                    self.pad_bottom = self.full_height - self.label['MINI_HEADER']['LINES'] -self.label['MINI_HEADER']['FIRST_LINE'] + 1
 
                     if self.pad_top!=0 or self.pad_bottom!=0 or self.pad_left!=0 or self.pad_right!=0:
                         
@@ -137,37 +135,16 @@ class image:
                         
                         self.im = pad_image( self.image, pad = [ self.pad_left, self.pad_right, self.pad_top, self.pad_bottom ] )
 
-        
-        # Mars2020 SuperCam RMI color processing
-        # elif self.filename[0]=='L':
-
-            # im /= flat
-
-            # w = 400
-            # high_scale = np.percentile( im[w:-w,w:-w,:], 99.8 )
-            # im /= high_scale
-            # clip_low = np.percentile( im[w:-w,w:-w,:], .05 )
-            # clip_low = 0.3
-            # high_cut = np.percentile( im[(w+300):-w,w:-w,:], 99.5 )
-            # print( 'scale',high_scale, 'cut', clip_low)
-
 
         # Ingenuity Return-to-Earch (RTE) color processing
         elif self.filename[0:3] == 'HSF':
             self.ftau = 1.0
 
-            # im /= np.load( 'C:/Users/cornell/Mastcam-Z/ws/HSF/HSF_flat_v1.npy' )
-            # im /= np.percentile( im[400:-10,100:-100,:], 99.9 )*1.0
-            # w = 100
-            # clip_low = 0.2  #np.percentile( im[w:-w,w:-w,:], .5 )
 
 
         # Ingenuity Navcam color processing
         elif self.filename[0:3] == 'HNM':
             self.ftau = 1.0
-#             w = 50
-#             self.im /= np.percentile( im[w:-w,w:-w,:], 99.95 )*1.0
-#             clip_low = np.percentile( im[w:-w,w:-w,:], 0.01 )*1.0
 
 
         # Mars2020 SHERLOC WATSON color processing
@@ -176,11 +153,6 @@ class image:
        
 
         if self.filename[0] in [ 'F', 'N', 'R']:
-            # Monochromatic VCE Navcam images
-            # if 'MV0' in self.IMG_path:
-            #     self.clip_low = 0.25
-
-            # Pad to the image's standard dimensions [ full_height, full_width, 3 ]
             if self.pad_im:
                 if   ( self.down_sample == '0' and self.im.shape!=(3840, 5120, 3) ) or \
                      ( self.down_sample == '1' and self.im.shape!=(1920, 2560, 3) ) or \
@@ -635,8 +607,6 @@ class image:
         self.t_veh2site = self.xyz
         
                 
-    
-
 
 
 def pad_image( im, pad = [0,0,0,0] ):

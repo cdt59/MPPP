@@ -34,8 +34,6 @@ class Camera(Enum):
 """
 Class that describes an IMG image. Includes both the image data and the metadata.
 """
-
-
 class Image:
 
     def __init__(self, IMG_path: str, just_label: bool = False, frame: Frame = Frame.SITE3):
