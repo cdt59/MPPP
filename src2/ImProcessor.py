@@ -1,4 +1,6 @@
 from src2.Image import Image, Camera
+import os
+import cv2
 import colour_demosaicing
 import numpy as np
 from typing import Tuple
@@ -6,8 +8,15 @@ from typing import Tuple
 """
 Function to process images
 
-Look into image_process()
+TODO: look into image and im in original MPPP, make sure they are referenced properly here
+TODO: change function to take in array rather than image object for clearer funciton calls with less assumptions
 """
+
+clip_low = 0.01
+scale_red = 1.0
+scale_blue = 1.0
+scale = 12
+gamma = 2
 
 
 class ImProcessor():
@@ -18,7 +27,7 @@ class ImProcessor():
         :param image: np.array, image to process
         """
         # Don't understand what this is
-        if self.filename.split('_N')[0][-3:] == 'RZS':
+        if image.filename.split('_N')[0][-3:] == 'RZS':
             ftau = np.float32(
                 image.label['DERIVED_IMAGE_PARMS']['RAD_ZENITH_SCALING_FACTOR'])
             image.image *= ftau
@@ -26,6 +35,7 @@ class ImProcessor():
         # if the image has one color band, either demosaic or stack the image to
         # make it a color image
         self.single_to_triple_channels(image)
+        image.proc_image = image.image.copy()
 
         # solar elevation angle
         mu = self.calculate_solar_elevation_angle(image)
@@ -36,10 +46,28 @@ class ImProcessor():
         # padding values
         paddings = self.calculate_padding(image)
         if any([pad != 0 for pad in paddings]) and image.pad_im:
-            image.image = self.pad_image(image.image, paddings)
+            image.proc_image = self.pad_image(image.proc_image, paddings)
 
         # create image mask
         mask_image = self.make_image_mask(image, paddings)
+        image.mask_image = mask_image
+
+        # apply color and brightness correction
+        image.image = self.color_brightness_correction(
+            image, ftau, scale, scale_red, scale_blue)
+
+        if image.filename[:3] == 'HNM':
+            im_max = np.percentile(image.proc_image, 99.9) * 1.01
+            image.proc_image /= im_max
+
+        # clip the image
+        image.image = self.clip_image(image, clip_low)
+
+        # gamma correction
+        image.image = self.gamma_correction(image, gamma)
+
+        # rescale image to 8 unsigned bits
+        image.im8 = np.clip(255*image.image, 0, 255).astype(np.uint8)
 
     def single_to_triple_channels(self, image: Image) -> None:
         """
@@ -75,20 +103,22 @@ class ImProcessor():
         :param image: np.array, image to process
         :param mu: float, solar elevation angle
         """
+        if (image.filename.startswith('Z') or image.filename.startswith('S')) \
+                and 'IOF_N' in image.filename:
+            return 1.0
+
         match image.cam_type:
             case Camera.HSF:
-                ftau = 1.0
+                return 1.0
             case Camera.HNM:
-                ftau = 1.0
+                return 1.0
             case Camera.SHERLOC:
-                ftau = 1.0
+                return 1.0
             case _:
                 tau = 0.5 if image.sol <= 700 else 0.8
                 tau_ref = 0.3
                 tau_min = 0.2
-                ftau = np.maximum(mu * np.exp(-(tau-tau_ref)/6/mu), tau_min)
-
-        return ftau
+                return np.maximum(mu * np.exp(-(tau-tau_ref)/6/mu), tau_min)
 
     def calculate_padding(self, image: Image) -> Tuple[int, int, int, int]:
         """
@@ -124,7 +154,7 @@ class ImProcessor():
             downsample_char = image.filename.split('_')[-1][3]
             downsample = int(
                 downsample_char) if downsample_char.isdigit() else None
-            full_h, full_w, c = 3840/2**downsample, 5120/2**downsample, 3
+            full_h, full_w, c = 3840//(2**downsample), 5120//(2**downsample), 3
 
             # if the image is not the expected size, calculate padding
             if (downsample is not None) and (image.image.shape != (full_h, full_w, c)):
@@ -140,7 +170,7 @@ class ImProcessor():
 
         return pad_left, pad_right, pad_top, pad_bottom
 
-    def pad_image(self, im: np.array, paddings: Tuple) -> np.array:
+    def pad_image(self, im_: np.array, paddings: Tuple) -> np.array:
         """
         Function to pad an image
         :param image: np.array, image to process
@@ -148,6 +178,7 @@ class ImProcessor():
         :return: np.array, padded image
         """
         pad_left, pad_right, pad_top, pad_bottom = paddings
+        im = im_.copy()
         if len(im.shape) == 3:
             padded_image = np.hstack([np.zeros((im.shape[0], pad_left, 3)), im,
                                       np.zeros((im.shape[0], pad_right, 3)), ])
@@ -174,10 +205,12 @@ class ImProcessor():
 
         # if there are non-zero padding values, pad the mask image
         if any([pad != 0 for pad in paddings]) and image.pad_im:
+
             mask_image = self.pad_image(mask_image, paddings)
 
             if pad_bottom == 0 and pad_right == 0:
-                mask_image[pad_top:, pad_left:][image.image[:, :, 1] == 0] = 0
+                mask_image[pad_top:,
+                           pad_left:][image.image[:, :, 1] == 0] = 0
             elif pad_bottom == 0:
                 mask_image[pad_top:, pad_left:-
                            pad_right][image.image[:, :, 1] == 0] = 0
@@ -191,4 +224,129 @@ class ImProcessor():
         else:
             mask_image[image.image[:, :, 1] == 0] = 0
 
-        return mask_image
+        pro_mask = self._process_mask(mask_image, image)
+
+        return pro_mask
+
+    def _process_mask(self, mask: np.array, image: Image) -> np.array:
+        """
+        Function to process the mask image
+        :param mask: np.array, mask image
+        :param image: np.array, image that is tied to this mask. Assumes image was already padded
+        :return: np.array, processed mask image
+        """
+        pro_mask = mask.copy()
+
+        # Mars2020 Mastcam-Z mask processing
+        if image.filename[0] in ['Z', 'S']:
+
+            pro_mask[:4, :] = 0
+            pro_mask[-1:, :] = 0
+            pro_mask[:, :24] = 0
+            pro_mask[:, -17:] = 0
+
+            # use pre-saved mask
+            parent_path = os.getcwd()
+            if image.filename[:2] == 'ZL':
+                mask_path = os.path.join(parent_path, 'params/ZL.jpg')
+            if image.filename[:2] == 'ZR':
+                mask_path = os.path.join(parent_path, 'params/ZL.jpg')
+            else:
+                mask_path = os.path.join(parent_path, 'params/S.jpg')
+            mask = cv2.imread(mask_path)
+            pro_mask[mask[:, :, 0] < 100] = 0
+
+        # Mars2020 SuperCam RMI mask processing
+        elif image.filename[0] == 'L':
+
+            pro_mask[image.image == 0] = 0
+            pro_mask[1800:, :, :] = 0
+            pro_mask = cv2.blur(pro_mask, (20, 20))
+            pro_mask[pro_mask < 255] = 0
+
+        # HNM
+        elif image.filename[:3] == 'HNM':
+
+            parent_path = os.getcwd()
+            mask_path = os.path.join(parent_path, 'params/HNM.jpg')
+            mask = cv2.imread(mask_path)
+            pro_mask[mask[:, :, 0] < 100] = 0
+
+        # Mars2020 Ecam mask processing
+        else:
+            pro_mask[:2, :] = 0
+            pro_mask[-2:, :] = 0
+            pro_mask[:, :3] = 0
+            pro_mask[:, -3:] = 0
+
+            # use pre-saved mask
+            if image.filename[0] == 'F':
+
+                try:
+                    downsample = int(image.filename.split('_')[-1][3])
+                except:
+                    print(
+                        f"Error in downsample informaiton for filename:{image.filename}", error=True)
+                    exit()
+
+                parent_path = os.getcwd()
+                if image.filename[:2] == 'FL':
+                    mask_path = os.path.join(
+                        parent_path, 'params/FL{}.jpg'.format(downsample))
+                else:
+                    mask_path = os.path.join(
+                        parent_path, 'params/FR{}.jpg'.format(downsample))
+
+                mask = cv2.imread(mask_path)
+                pro_mask[mask[:, :, 0] < 100] = 0
+
+            elif 'MV' in image.filename or 'M_' in image.filename:
+
+                parent_path = os.getcwd()
+                if image.filename[:2] == 'NL':
+                    mask_path = os.path.join(parent_path, 'params/NL2_vce.jpg')
+                else:
+                    mask_path = os.path.join(parent_path, 'params/NR2_vce.jpg')
+
+                mask = cv2.imread(mask_path)
+                pro_mask[mask[:, :, 0] < 100] = 0
+
+        return pro_mask
+
+    def color_brightness_correction(self, image: Image, ftau: float, scale: float, scale_red: float, scale_blue: float) -> np.array:
+        """
+        Function to apply color and brightness correction to an image
+        :param image: np.array, image to process
+        :param ftau: float, ftau value
+        :param scale: float, scale value
+        :param scale_red: float, red scale value
+        :param scale_blue: float, blue scale value
+        """
+        im = image.proc_image.copy()
+
+        im[:, :, 0] *= scale / ftau * scale_red
+        im[:, :, 1] *= scale / ftau * 1
+        im[:, :, 2] *= scale / ftau * scale_blue
+
+        return im
+
+    def clip_image(self, image: Image, clip_low: float) -> np.array:
+        """
+        Function to clip the image
+        :param image: np.array, image to process
+        """
+        im = image.proc_image.copy()
+
+        im = (im - clip_low)/(1 - clip_low)
+        return np.clip(im, 0, 1)
+
+    def gamma_correction(self, image: Image, gamma: float) -> np.array:
+        """
+        Function to apply gamma correction to an image
+        :param image: np.array, image to process
+        :param gamma: float, gamma value
+        """
+        im = image.proc_image.copy()
+        if gamma != 1.0:
+            return im**(1 / gamma)
+        return im

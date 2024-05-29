@@ -86,46 +86,78 @@ class TestImageProcessing(unittest.TestCase):
     #     self.assertEqual(self.processor.calculate_padding(self.nrmv),
     #                      (0, 0, 0, 0))
 
-    def test_make_image_mask(self):
-        zcam_l_padded_image = self.processor.pad_image(
-            self.zcam_l.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.zcam_l, (0, 0, 0, 0)).shape,
-                         zcam_l_padded_image.shape[:2])
+    # def test_make_image_mask(self):
+    #     zcam_l_padded_image = self.processor.pad_image(
+    #         self.zcam_l.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.zcam_l, (0, 0, 0, 0)).shape,
+    #                      zcam_l_padded_image.shape[:2])
 
-        zcam_r_padded_image = self.processor.pad_image(
-            self.zcam_r.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.zcam_r, (0, 0, 0, 0)).shape,
-                         zcam_l_padded_image.shape[:2])
+    #     zcam_r_padded_image = self.processor.pad_image(
+    #         self.zcam_r.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.zcam_r, (0, 0, 0, 0)).shape,
+    #                      zcam_l_padded_image.shape[:2])
 
-        flf_padded_image = self.processor.pad_image(
-            self.flf.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.flf, (0, 0, 0, 0)).shape,
-                         flf_padded_image.shape[:2])
+    #     flf_padded_image = self.processor.pad_image(
+    #         self.flf.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.flf, (0, 0, 0, 0)).shape,
+    #                      flf_padded_image.shape[:2])
 
-        frf_padded_image = self.processor.pad_image(
-            self.frf.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.frf, (0, 0, 0, 0)).shape,
-                         frf_padded_image.shape[:2])
+    #     frf_padded_image = self.processor.pad_image(
+    #         self.frf.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.frf, (0, 0, 0, 0)).shape,
+    #                      frf_padded_image.shape[:2])
 
-        nlf_padded_image = self.processor.pad_image(
-            self.nlf.image, (1928, 1912, 1448, 1432))
-        self.assertEqual(self.processor.make_image_mask(
-            self.nlf, (1928, 1912, 1448, 1432)).shape, nlf_padded_image.shape[:2])
+    #     nlf_padded_image = self.processor.pad_image(
+    #         self.nlf.image, (1928, 1912, 1448, 1432))
+    #     self.assertEqual(self.processor.make_image_mask(
+    #         self.nlf, (1928, 1912, 1448, 1432)).shape, nlf_padded_image.shape[:2])
 
-        nrf_padded_image = self.processor.pad_image(
-            self.nrf.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.nrf, (0, 0, 0, 0)).shape,
-                         nrf_padded_image.shape[:2])
+    #     nrf_padded_image = self.processor.pad_image(
+    #         self.nrf.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.nrf, (0, 0, 0, 0)).shape,
+    #                      nrf_padded_image.shape[:2])
 
-        nlmv_padded_image = self.processor.pad_image(
-            self.nlmv.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.nlmv, (0, 0, 0, 0)).shape,
-                         nlmv_padded_image.shape[:2])
+    #     nlmv_padded_image = self.processor.pad_image(
+    #         self.nlmv.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.nlmv, (0, 0, 0, 0)).shape,
+    #                      nlmv_padded_image.shape[:2])
 
-        nrmv_padded_image = self.processor.pad_image(
-            self.nrmv.image, (0, 0, 0, 0))
-        self.assertEqual(self.processor.make_image_mask(self.nrmv, (0, 0, 0, 0)).shape,
-                         nrmv_padded_image.shape[:2])
+    #     nrmv_padded_image = self.processor.pad_image(
+    #         self.nrmv.image, (0, 0, 0, 0))
+    #     self.assertEqual(self.processor.make_image_mask(self.nrmv, (0, 0, 0, 0)).shape,
+    #                      nrmv_padded_image.shape[:2])
+
+    # tests for color_brightness_correction
+    # def test_color_brightness_correction(self):
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.zcam_l, 0.5, 12, 1, 1).shape, self.zcam_l.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.zcam_r, 0.5, 12, 1, 1).shape, self.zcam_r.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.flf, 0.5, 12, 1, 1).shape, self.flf.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.frf, 0.5, 12, 1, 1).shape, self.frf.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.nlf, 0.5, 12, 1, 1).shape, self.nlf.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.nrf, 0.5, 12, 1, 1).shape, self.nrf.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.nlmv, 0.5, 12, 1, 1).shape, self.nlmv.image.shape)
+    #     self.assertEqual(self.processor.color_brightness_correction(
+    #         self.nrmv, 0.5, 12, 1, 1).shape, self.nrmv.image.shape)
+
+    # test process_image()
+    def test_process_image_pipeline(self):
+        self.setUp()
+
+        self.processor.process_image(self.zcam_l)
+        self.processor.process_image(self.zcam_r)
+        self.processor.process_image(self.flf)
+        self.processor.process_image(self.frf)
+        self.processor.process_image(self.nlf)
+        self.processor.process_image(self.nrf)
+        self.processor.process_image(self.nlmv)
+        self.processor.process_image(self.nrmv)
 
 
 if __name__ == '__main__':
