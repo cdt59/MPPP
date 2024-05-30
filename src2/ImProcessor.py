@@ -44,16 +44,17 @@ class ImProcessor():
         ftau = self.find_ftau(image, mu)
 
         # padding values
-        paddings = self.calculate_padding(image)
-        if any([pad != 0 for pad in paddings]) and image.pad_im:
-            image.proc_image = self.pad_image(image.proc_image, paddings)
+        if image.pad_im:
+            paddings = self.calculate_padding(image)
+            if any([pad != 0 for pad in paddings]):
+                image.proc_image = self.pad_image(image.proc_image, paddings)
 
         # create image mask
         mask_image = self.make_image_mask(image, paddings)
         image.mask_image = mask_image
 
         # apply color and brightness correction
-        image.image = self.color_brightness_correction(
+        self.color_brightness_correction(
             image, ftau, scale, scale_red, scale_blue)
 
         if image.filename[:3] == 'HNM':
@@ -61,13 +62,13 @@ class ImProcessor():
             image.proc_image /= im_max
 
         # clip the image
-        image.image = self.clip_image(image, clip_low)
+        self.clip_image(image, clip_low)
 
         # gamma correction
-        image.image = self.gamma_correction(image, gamma)
+        self.gamma_correction(image, gamma)
 
         # rescale image to 8 unsigned bits
-        image.im8 = np.clip(255*image.image, 0, 255).astype(np.uint8)
+        image.im8 = np.clip(255*image.proc_image, 0, 255).astype('uint8')
 
     def single_to_triple_channels(self, image: Image) -> None:
         """
@@ -94,7 +95,7 @@ class ImProcessor():
             mu = np.sin(
                 image.label['SITE_DERIVED_GEOMETRY_PARMS']['SOLAR_ELEVATION'][0]/d)
         except:
-            mu = 1
+            mu = 1.0
         return mu
 
     def find_ftau(self, image: Image, mu: float) -> float:
@@ -117,8 +118,8 @@ class ImProcessor():
             case _:
                 tau = 0.5 if image.sol <= 700 else 0.8
                 tau_ref = 0.3
-                tau_min = 0.2
-                return np.maximum(mu * np.exp(-(tau-tau_ref)/6/mu), tau_min)
+                ftau_min = 0.2
+                return np.maximum(mu * np.exp(-(tau-tau_ref)/6/mu), ftau_min)
 
     def calculate_padding(self, image: Image) -> Tuple[int, int, int, int]:
         """
@@ -148,25 +149,33 @@ class ImProcessor():
         # padding for HAZCAM front, Hazcam rear and Navcam images
         elif image.cam_type == Camera.HAZCAM_FRONT or\
                 image.cam_type == Camera.HAZCAM_REAR or\
-                image.cam_type == Camera.NAVCAM:
+                image.cam_type == Camera.NAVCAM or\
+                image.cam_type == Camera.NAVCAM_VCE:
 
             # parse the downsample value and calc expected image size
             downsample_char = image.filename.split('_')[-1][3]
             downsample = int(
                 downsample_char) if downsample_char.isdigit() else None
-            full_h, full_w, c = 3840//(2**downsample), 5120//(2**downsample), 3
+            if (downsample is not None) and (downsample in [0, 1, 2]):
+                if downsample == 0:
+                    full_h, full_w, c = 3840, 5120, 3
+                elif downsample == 1:
+                    full_h, full_w, c = 1920, 2560, 3
+                elif downsample == 2:
+                    full_h, full_w, c = 960, 1280, 3
 
-            # if the image is not the expected size, calculate padding
-            if (downsample is not None) and (image.image.shape != (full_h, full_w, c)):
-                tile_first_line_sample = image.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE_SAMPLE']
-                tile_first_line = image.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE']
+                # if the image is not the expected size, calculate padding
+                if image.image.shape != (full_h, full_w, c):
 
-                pad_left = np.min(tile_first_line_sample) - 1
-                pad_right = np.max(
-                    full_w - np.max(tile_first_line_sample) - 1280 + 1, 0)
-                pad_top = np.min(tile_first_line) - 1
-                pad_bottom = np.max(
-                    full_h - np.max(tile_first_line) - 960 + 1, 0)
+                    tile_first_line_sample = image.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE_SAMPLE']
+                    tile_first_line = image.label['INSTRUMENT_STATE_PARMS']['TILE_FIRST_LINE']
+
+                    pad_left = np.min(tile_first_line_sample) - 1
+                    pad_right = np.max(
+                        full_w - np.max(tile_first_line_sample) - 1280 + 1, 0)
+                    pad_top = np.min(tile_first_line) - 1
+                    pad_bottom = np.max(
+                        full_h - np.max(tile_first_line) - 960 + 1, 0)
 
         return pad_left, pad_right, pad_top, pad_bottom
 
@@ -177,21 +186,18 @@ class ImProcessor():
         :param paddings: padding values (left, right, top, bottom)
         :return: np.array, padded image
         """
-        pad_left, pad_right, pad_top, pad_bottom = paddings
         im = im_.copy()
         if len(im.shape) == 3:
-            padded_image = np.hstack([np.zeros((im.shape[0], pad_left, 3)), im,
-                                      np.zeros((im.shape[0], pad_right, 3)), ])
-            padded_image = np.vstack([np.zeros((pad_top, padded_image.shape[1], 3)),
-                                      padded_image,
-                                      np.zeros((pad_bottom, padded_image.shape[1], 3)), ])
+            im = np.hstack([np.zeros((im.shape[0], paddings[0], 3)),
+                           im, np.zeros((im.shape[0],  paddings[1], 3)), ])
+            im = np.vstack([np.zeros((paddings[2], im.shape[1],  3)),
+                           im, np.zeros((paddings[3],  im.shape[1], 3)), ])
         else:
-            padded_image = np.hstack([np.zeros((im.shape[0], pad_left)), im,
-                                      np.zeros((im.shape[0], pad_right)), ])
-            padded_image = np.vstack([np.zeros((pad_top, padded_image.shape[1])),
-                                      padded_image,
-                                      np.zeros((pad_bottom, padded_image.shape[1])), ])
-        return padded_image
+            im = np.hstack([np.zeros((im.shape[0],   paddings[0])),
+                           im, np.zeros((im.shape[0],  paddings[1])), ])
+            im = np.vstack([np.zeros((paddings[2], im.shape[1],)),
+                           im, np.zeros((paddings[3],  im.shape[1])), ])
+        return im
 
     def make_image_mask(self, image: Image, paddings: Tuple) -> np.array:
         """
@@ -300,7 +306,7 @@ class ImProcessor():
                 mask = cv2.imread(mask_path)
                 pro_mask[mask[:, :, 0] < 100] = 0
 
-            elif 'MV' in image.filename or 'M_' in image.filename:
+            if 'MV' in image.filename or 'M_' in image.filename:
 
                 parent_path = os.getcwd()
                 if image.filename[:2] == 'NL':
@@ -313,7 +319,7 @@ class ImProcessor():
 
         return pro_mask
 
-    def color_brightness_correction(self, image: Image, ftau: float, scale: float, scale_red: float, scale_blue: float) -> np.array:
+    def color_brightness_correction(self, image: Image, ftau: float, scale: float, scale_red: float, scale_blue: float) -> None:
         """
         Function to apply color and brightness correction to an image
         :param image: np.array, image to process
@@ -322,31 +328,23 @@ class ImProcessor():
         :param scale_red: float, red scale value
         :param scale_blue: float, blue scale value
         """
-        im = image.proc_image.copy()
-
-        im[:, :, 0] *= scale / ftau * scale_red
-        im[:, :, 1] *= scale / ftau * 1
-        im[:, :, 2] *= scale / ftau * scale_blue
-
-        return im
+        image.proc_image[:, :, 0] *= scale / ftau * scale_red
+        image.proc_image[:, :, 1] *= scale / ftau * 1
+        image.proc_image[:, :, 2] *= scale / ftau * scale_blue
 
     def clip_image(self, image: Image, clip_low: float) -> np.array:
         """
         Function to clip the image
         :param image: np.array, image to process
         """
-        im = image.proc_image.copy()
+        image.proc_image = (image.proc_image - clip_low)/(1 - clip_low)
+        image.proc_image = np.clip(image.proc_image, 0, 1)
 
-        im = (im - clip_low)/(1 - clip_low)
-        return np.clip(im, 0, 1)
-
-    def gamma_correction(self, image: Image, gamma: float) -> np.array:
+    def gamma_correction(self, image: Image, gamma: float):
         """
         Function to apply gamma correction to an image
         :param image: np.array, image to process
         :param gamma: float, gamma value
         """
-        im = image.proc_image.copy()
         if gamma != 1.0:
-            return im**(1 / gamma)
-        return im
+            image.proc_image = image.proc_image**(1 / gamma)

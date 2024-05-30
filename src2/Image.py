@@ -107,7 +107,7 @@ class Image:
         if fname[0] == 'L':
             return Camera.RMI
 
-        if fname[0] == 'N':
+        if fname[0] == 'N' and not ('MV' in fname or 'M_' in fname):
             return Camera.NAVCAM
 
         if 'MV' in fname or 'M_' in fname:

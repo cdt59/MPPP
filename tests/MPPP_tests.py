@@ -1,6 +1,10 @@
 import unittest
+import os
 from src2.ImProcessor import ImProcessor
 from src2.Image import Image
+from src.MPPP import image
+import matplotlib.image
+import numpy as np
 
 
 class TestImageProcessing(unittest.TestCase):
@@ -127,7 +131,6 @@ class TestImageProcessing(unittest.TestCase):
     #     self.assertEqual(self.processor.make_image_mask(self.nrmv, (0, 0, 0, 0)).shape,
     #                      nrmv_padded_image.shape[:2])
 
-    # tests for color_brightness_correction
     # def test_color_brightness_correction(self):
     #     self.assertEqual(self.processor.color_brightness_correction(
     #         self.zcam_l, 0.5, 12, 1, 1).shape, self.zcam_l.image.shape)
@@ -147,17 +150,204 @@ class TestImageProcessing(unittest.TestCase):
     #         self.nrmv, 0.5, 12, 1, 1).shape, self.nrmv.image.shape)
 
     # test process_image()
-    def test_process_image_pipeline(self):
+    # def test_process_image_pipeline(self):
+    #     self.setUp()
+
+    #     self.processor.process_image(self.zcam_l)
+    #     self.processor.process_image(self.zcam_r)
+    #     self.processor.process_image(self.flf)
+    #     self.processor.process_image(self.frf)
+    #     self.processor.process_image(self.nlf)
+    #     self.processor.process_image(self.nrf)
+    #     self.processor.process_image(self.nlmv)
+    #     self.processor.process_image(self.nrmv)
+
+    def test_image_process(self):
+        # for each image, compare the processing of ImProcessor and MPPP.Image
         self.setUp()
 
+        scale = 12
+        scale_red = 1.0
+        scale_blue = 1.0
+        clip_low = 0.01
+        gamma = 2
+        pad_im = True
+        save_im = False
+        save_mask = False
+        find_offsets_mode = 0
+
+        # ZCAM_LEFT
+        zcam_l_old = image(os.path.join(
+            "data/sol_0709", self.zcam_l.filename))
+        zcam_l_old.scale = scale
+        zcam_l_old.scale_red = scale_red
+        zcam_l_old.scale_blue = scale_blue
+        zcam_l_old.clip_low = clip_low
+        zcam_l_old.gamma = gamma
+        zcam_l_old.pad_im = pad_im
+        zcam_l_old.save_im = save_im
+        zcam_l_old.save_mask = save_mask
+        zcam_l_old.find_offsets_mode = find_offsets_mode
+
+        zcam_l_old.image_process()
+        old_proc_zcam_l = zcam_l_old.im8
+
         self.processor.process_image(self.zcam_l)
+        new_proc_zcam_l = self.zcam_l.im8
+
+        self.assertEqual(old_proc_zcam_l.shape, new_proc_zcam_l.shape)
+        self.assertTrue((old_proc_zcam_l == new_proc_zcam_l).all())
+
+        # ZCAM_right
+        zcam_r_old = image(os.path.join(
+            "data/sol_0709", self.zcam_r.filename))
+        zcam_r_old.scale = scale
+        zcam_r_old.scale_red = scale_red
+        zcam_r_old.scale_blue = scale_blue
+        zcam_r_old.clip_low = clip_low
+        zcam_r_old.gamma = gamma
+        zcam_r_old.pad_im = pad_im
+        zcam_r_old.save_im = save_im
+        zcam_r_old.save_mask = save_mask
+        zcam_r_old.find_offsets_mode = find_offsets_mode
+
+        zcam_r_old.image_process()
+        old_proc_zcam_r = zcam_r_old.im8
+
         self.processor.process_image(self.zcam_r)
+        new_proc_zcam_r = self.zcam_r.im8
+
+        self.assertEqual(old_proc_zcam_r.shape, new_proc_zcam_r.shape)
+        self.assertTrue((old_proc_zcam_r == new_proc_zcam_r).all())
+
+        # FLF
+        flf_old = image(os.path.join(
+            "data/sol_0709", self.flf.filename))
+        flf_old.scale = scale
+        flf_old.scale_red = scale_red
+        flf_old.scale_blue = scale_blue
+        flf_old.clip_low = clip_low
+        flf_old.gamma = gamma
+        flf_old.pad_im = pad_im
+        flf_old.save_im = save_im
+        flf_old.save_mask = save_mask
+        flf_old.find_offsets_mode = find_offsets_mode
+
+        flf_old.image_process()
+        old_proc_flf = flf_old.im8
+
         self.processor.process_image(self.flf)
+        new_proc_flf = self.flf.im8
+
+        self.assertEqual(old_proc_flf.shape, new_proc_flf.shape)
+        self.assertTrue((old_proc_flf == new_proc_flf).all())
+
+        # FRF
+        frf_old = image(os.path.join(
+            "data/sol_0709", self.frf.filename))
+        frf_old.scale = scale
+        frf_old.scale_red = scale_red
+        frf_old.scale_blue = scale_blue
+        frf_old.clip_low = clip_low
+        frf_old.gamma = gamma
+        frf_old.pad_im = pad_im
+        frf_old.save_im = save_im
+        frf_old.save_mask = save_mask
+        frf_old.find_offsets_mode = find_offsets_mode
+
+        frf_old.image_process()
+        old_proc_frf = frf_old.im8
+
         self.processor.process_image(self.frf)
+        new_proc_frf = self.frf.im8
+
+        self.assertEqual(old_proc_frf.shape, new_proc_frf.shape)
+        self.assertTrue((old_proc_frf == new_proc_frf).all())
+
+        # NLF
+        nlf_old = image(os.path.join(
+            "data/sol_0709", self.nlf.filename))
+        nlf_old.scale = 12
+        nlf_old.scale_red = 1.0
+        nlf_old.scale_blue = 1.0
+        nlf_old.clip_low = 0.01
+        nlf_old.gamma = 2
+        nlf_old.pad_im = True
+        nlf_old.save_im = False
+        nlf_old.save_mask = False
+        nlf_old.find_offsets_mode = 0
+
+        nlf_old.image_process()
+        old_proc_nlf = nlf_old.im8
+
         self.processor.process_image(self.nlf)
+        new_proc_nlf = self.nlf.im8
+
+        self.assertEqual(old_proc_nlf.shape, new_proc_nlf.shape)
+        self.assertTrue((old_proc_nlf == new_proc_nlf).all())
+
+        # NRF
+        nrf_old = image(os.path.join(
+            "data/sol_0709", self.nrf.filename))
+        nrf_old.scale = 12
+        nrf_old.scale_red = 1.0
+        nrf_old.scale_blue = 1.0
+        nrf_old.clip_low = 0.01
+        nrf_old.gamma = 2
+        nrf_old.pad_im = True
+        nrf_old.save_im = False
+        nrf_old.save_mask = False
+        nrf_old.find_offsets_mode = 0
+
+        nrf_old.image_process()
+        old_proc_nrf = nrf_old.im8
+
         self.processor.process_image(self.nrf)
+        new_proc_nrf = self.nrf.im8
+
+        self.assertEqual(old_proc_nrf.shape, new_proc_nrf.shape)
+        self.assertTrue((old_proc_nrf == new_proc_nrf).all())
+
+        # NLMV
+        nlmv_old = image(self.nlmv.IMG_path)
+        nlmv_old.scale = 12
+        nlmv_old.scale_red = 1.0
+        nlmv_old.scale_blue = 1.0
+        nlmv_old.clip_low = 0.01
+        nlmv_old.gamma = 2
+        nlmv_old.pad_im = True
+        nlmv_old.save_im = False
+        nlmv_old.save_mask = False
+        nlmv_old.find_offsets_mode = 0
+        nlmv_old.image_process()
+        old_proc_nlmv = nlmv_old.im
+
         self.processor.process_image(self.nlmv)
+        new_proc_nlmv = self.nlmv.proc_image
+
+        self.assertEqual(old_proc_nlmv.shape, new_proc_nlmv.shape)
+        self.assertTrue((old_proc_nlmv == new_proc_nlmv).all())
+
+        # NRMV
+        nrmv_old = image(self.nrmv.IMG_path)
+        nrmv_old.scale = 12
+        nrmv_old.scale_red = 1.0
+        nrmv_old.scale_blue = 1.0
+        nrmv_old.clip_low = 0.01
+        nrmv_old.gamma = 2
+        nrmv_old.pad_im = True
+        nrmv_old.save_im = False
+        nrmv_old.save_mask = False
+        nrmv_old.find_offsets_mode = 0
+
+        nrmv_old.image_process()
+        old_proc_nrmv = nrmv_old.im
+
         self.processor.process_image(self.nrmv)
+        new_proc_nrmv = self.nrmv.proc_image
+
+        self.assertEqual(old_proc_nrmv.shape, new_proc_nrmv.shape)
+        self.assertTrue((old_proc_nrmv == new_proc_nrmv).all())
 
 
 if __name__ == '__main__':
