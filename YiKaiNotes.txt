@@ -1,9 +1,0 @@
-IDEAS:
-- Abstraction: Image class and a processor class (possibility to split the processor into finer parts)
-- create enums for each type of image coming from different cameras of the rover
-
-
-
-TODO:
-- access M2020 Tau record
-

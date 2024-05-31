@@ -228,7 +228,7 @@ class image:
             if self.filename[:2] == 'ZL':
                 mask_path = os.path.join(parent_path, 'params/ZL.jpg')
             if self.filename[:2] == 'ZR':
-                mask_path = os.path.join(parent_path, 'params/ZL.jpg')
+                mask_path = os.path.join(parent_path, 'params/ZR.jpg')
             else:
                 mask_path = os.path.join(parent_path, 'params/S.jpg')
             mask = cv2.imread(mask_path)
