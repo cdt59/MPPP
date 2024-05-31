@@ -245,7 +245,6 @@ class ImProcessor():
 
         # Mars2020 Mastcam-Z mask processing
         if image.filename[0] in ['Z', 'S']:
-
             pro_mask[:4, :] = 0
             pro_mask[-1:, :] = 0
             pro_mask[:, :24] = 0
@@ -259,8 +258,9 @@ class ImProcessor():
                 mask_path = os.path.join(parent_path, 'params/ZL.jpg')
             else:
                 mask_path = os.path.join(parent_path, 'params/S.jpg')
-            mask = cv2.imread(mask_path)
-            pro_mask[mask[:, :, 0] < 100] = 0
+            stored_mask = cv2.imread(mask_path)
+            pro_mask[stored_mask[:, :, 0] < 100] = 0
+
 
         # Mars2020 SuperCam RMI mask processing
         elif image.filename[0] == 'L':

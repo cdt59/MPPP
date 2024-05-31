@@ -214,7 +214,6 @@ class image:
 
         # Mars2020 Mastcam-Z mask processing
         if self.filename[0] in ['Z', 'S']:
-
             self.mask_im[:4, :] = 0
             self.mask_im[-1:, :] = 0
             self.mask_im[:, :24] = 0
@@ -236,14 +235,14 @@ class image:
             self.mask_im[mask[:, :, 0] < 100] = 0
 
         # Mars2020 SuperCam RMI mask processing
-        if self.filename[0] == 'L':
+        elif self.filename[0] == 'L':
 
             self.mask_im[self.image == 0] = 0
             self.mask_im[1800:, :, :] = 0
             self.mask_im = cv2.blur(self.mask_im, (20, 20))
             self.mask_im[self.mask_im < 255] = 0
 
-        if self.filename[:3] == 'HNM':
+        elif self.filename[:3] == 'HNM':
 
             # parent_path  = os.path.split( os.getcwd() )[0]
             parent_path = os.getcwd()

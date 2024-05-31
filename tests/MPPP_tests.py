@@ -198,6 +198,25 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_zcam_l.shape, new_proc_zcam_l.shape)
         self.assertTrue((old_proc_zcam_l == new_proc_zcam_l).all())
 
+        old_mask_zcam_l = zcam_l_old.mask_im
+        new_mask_zcam_l = self.zcam_l.mask_image
+
+        # TODO: remove this block
+        # # mask verbose information for dubugging
+        # mask_diff = old_mask_zcam_l - new_mask_zcam_l
+        # print(f"Mask total pixel difference: {mask_diff.sum().sum()}")
+        # print(f"Mask max difference: {mask_diff.max().max()}")
+        # print(f"Mask min difference: {mask_diff.min().min()}")
+        # print(f"mask shape: {old_mask_zcam_l.shape}")
+
+        # # save mask and differences
+        # matplotlib.image.imsave("tests/old_mask_zcam_l.png", old_mask_zcam_l)
+        # matplotlib.image.imsave("tests/new_mask_zcam_l.png", new_mask_zcam_l)
+        # matplotlib.image.imsave("tests/mask_diff.png", -mask_diff)
+
+        self.assertEqual(old_mask_zcam_l.shape, new_mask_zcam_l.shape)
+        self.assertTrue((old_mask_zcam_l == new_mask_zcam_l).all())
+
         # ZCAM_right
         zcam_r_old = image(os.path.join(
             "data/sol_0709", self.zcam_r.filename))
@@ -242,6 +261,16 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_flf.shape, new_proc_flf.shape)
         self.assertTrue((old_proc_flf == new_proc_flf).all())
 
+        old_mask_zcam_r = zcam_r_old.mask_im
+        new_mask_zcam_r = self.zcam_r.mask_image
+        self.assertEqual(old_mask_zcam_r.shape, new_mask_zcam_r.shape)
+        self.assertTrue((old_mask_zcam_r == new_mask_zcam_r).all())
+
+        old_mask_flf = flf_old.mask_im
+        new_mask_flf = self.flf.mask_image
+        self.assertEqual(old_mask_flf.shape, new_mask_flf.shape)
+        self.assertTrue((old_mask_flf == new_mask_flf).all())
+
         # FRF
         frf_old = image(os.path.join(
             "data/sol_0709", self.frf.filename))
@@ -264,18 +293,23 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_frf.shape, new_proc_frf.shape)
         self.assertTrue((old_proc_frf == new_proc_frf).all())
 
+        old_mask_frf = frf_old.mask_im
+        new_mask_frf = self.frf.mask_image
+        self.assertEqual(old_mask_frf.shape, new_mask_frf.shape)
+        self.assertTrue((old_mask_frf == new_mask_frf).all())
+
         # NLF
         nlf_old = image(os.path.join(
             "data/sol_0709", self.nlf.filename))
-        nlf_old.scale = 12
-        nlf_old.scale_red = 1.0
-        nlf_old.scale_blue = 1.0
-        nlf_old.clip_low = 0.01
-        nlf_old.gamma = 2
-        nlf_old.pad_im = True
-        nlf_old.save_im = False
-        nlf_old.save_mask = False
-        nlf_old.find_offsets_mode = 0
+        nlf_old.scale = scale
+        nlf_old.scale_red = scale_red
+        nlf_old.scale_blue = scale_blue
+        nlf_old.clip_low = clip_low
+        nlf_old.gamma = gamma
+        nlf_old.pad_im = pad_im
+        nlf_old.save_im = save_im
+        nlf_old.save_mask = save_mask
+        nlf_old.find_offsets_mode = find_offsets_mode
 
         nlf_old.image_process()
         old_proc_nlf = nlf_old.im8
@@ -286,18 +320,23 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_nlf.shape, new_proc_nlf.shape)
         self.assertTrue((old_proc_nlf == new_proc_nlf).all())
 
+        old_mask_nlf = nlf_old.mask_im
+        new_mask_nlf = self.nlf.mask_image
+        self.assertEqual(old_mask_nlf.shape, new_mask_nlf.shape)
+        self.assertTrue((old_mask_nlf == new_mask_nlf).all())
+
         # NRF
         nrf_old = image(os.path.join(
             "data/sol_0709", self.nrf.filename))
-        nrf_old.scale = 12
-        nrf_old.scale_red = 1.0
-        nrf_old.scale_blue = 1.0
-        nrf_old.clip_low = 0.01
-        nrf_old.gamma = 2
-        nrf_old.pad_im = True
-        nrf_old.save_im = False
-        nrf_old.save_mask = False
-        nrf_old.find_offsets_mode = 0
+        nrf_old.scale = scale
+        nrf_old.scale_red = scale_red
+        nrf_old.scale_blue = scale_blue
+        nrf_old.clip_low = clip_low
+        nrf_old.gamma = gamma
+        nrf_old.pad_im = pad_im
+        nrf_old.save_im = save_im
+        nrf_old.save_mask = save_mask
+        nrf_old.find_offsets_mode = find_offsets_mode
 
         nrf_old.image_process()
         old_proc_nrf = nrf_old.im8
@@ -308,17 +347,23 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_nrf.shape, new_proc_nrf.shape)
         self.assertTrue((old_proc_nrf == new_proc_nrf).all())
 
+        old_mask_nrf = nrf_old.mask_im
+        new_mask_nrf = self.nrf.mask_image
+        self.assertEqual(old_mask_nrf.shape, new_mask_nrf.shape)
+        self.assertTrue((old_mask_nrf == new_mask_nrf).all())
+
         # NLMV
         nlmv_old = image(self.nlmv.IMG_path)
-        nlmv_old.scale = 12
-        nlmv_old.scale_red = 1.0
-        nlmv_old.scale_blue = 1.0
-        nlmv_old.clip_low = 0.01
-        nlmv_old.gamma = 2
-        nlmv_old.pad_im = True
-        nlmv_old.save_im = False
-        nlmv_old.save_mask = False
-        nlmv_old.find_offsets_mode = 0
+        nlmv_old.scale = scale
+        nlmv_old.scale_red = scale_red
+        nlmv_old.scale_blue = scale_blue
+        nlmv_old.clip_low = clip_low
+        nlmv_old.gamma = gamma
+        nlmv_old.pad_im = pad_im
+        nlmv_old.save_im = save_im
+        nlmv_old.save_mask = save_mask
+        nlmv_old.find_offsets_mode = find_offsets_mode
+
         nlmv_old.image_process()
         old_proc_nlmv = nlmv_old.im
 
@@ -328,17 +373,22 @@ class TestImageProcessing(unittest.TestCase):
         self.assertEqual(old_proc_nlmv.shape, new_proc_nlmv.shape)
         self.assertTrue((old_proc_nlmv == new_proc_nlmv).all())
 
+        old_mask_nlmv = nlmv_old.mask_im
+        new_mask_nlmv = self.nlmv.mask_image
+        self.assertEqual(old_mask_nlmv.shape, new_mask_nlmv.shape)
+        self.assertTrue((old_mask_nlmv == new_mask_nlmv).all())
+
         # NRMV
         nrmv_old = image(self.nrmv.IMG_path)
-        nrmv_old.scale = 12
-        nrmv_old.scale_red = 1.0
-        nrmv_old.scale_blue = 1.0
-        nrmv_old.clip_low = 0.01
-        nrmv_old.gamma = 2
-        nrmv_old.pad_im = True
-        nrmv_old.save_im = False
-        nrmv_old.save_mask = False
-        nrmv_old.find_offsets_mode = 0
+        nrmv_old.scale = scale
+        nrmv_old.scale_red = scale_red
+        nrmv_old.scale_blue = scale_blue
+        nrmv_old.clip_low = clip_low
+        nrmv_old.gamma = gamma
+        nrmv_old.pad_im = pad_im
+        nrmv_old.save_im = save_im
+        nrmv_old.save_mask = save_mask
+        nrmv_old.find_offsets_mode = find_offsets_mode
 
         nrmv_old.image_process()
         old_proc_nrmv = nrmv_old.im
@@ -348,6 +398,11 @@ class TestImageProcessing(unittest.TestCase):
 
         self.assertEqual(old_proc_nrmv.shape, new_proc_nrmv.shape)
         self.assertTrue((old_proc_nrmv == new_proc_nrmv).all())
+
+        old_mask_nrmv = nrmv_old.mask_im
+        new_mask_nrmv = self.nrmv.mask_image
+        self.assertEqual(old_mask_nrmv.shape, new_mask_nrmv.shape)
+        self.assertTrue((old_mask_nrmv == new_mask_nrmv).all())
 
 
 if __name__ == '__main__':
