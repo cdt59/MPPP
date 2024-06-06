@@ -1,14 +1,7 @@
 from enum import Enum
 from planetaryimage import PDS3Image
-from scipy.spatial.transform import Rotation as R
-from scipy.interpolate import interp1d
 import numpy as np
-import matplotlib.pyplot as plt
-import colour_demosaicing
 import os
-import cv2
-import time
-import glob
 import pandas as pd
 
 
@@ -37,6 +30,9 @@ Class that describes an IMG image. Includes both the image data and the metadata
 
 
 class Image:
+    """
+    Class that represents an image object.
+    """
 
     def __init__(self, IMG_path: str, just_label: bool = False, frame: Frame = Frame.SITE3):
         """

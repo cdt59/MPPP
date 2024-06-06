@@ -799,7 +799,7 @@ def image_list_process(IMG_paths, directory_output, suf, find_offsets_mode=0, fr
 
     # File parameters
     '''
-    future work: save these calibration prameters as a text files, which we load for each camera
+    future work: save these calibration parameters as a text files, which we load for each camera
     '''
 
     file_extension = ''

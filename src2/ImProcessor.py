@@ -1,15 +1,12 @@
-from src2.Image import Image, Camera
+from src2.Image import Image, Camera, Frame
 import os
 import cv2
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
 import numpy as np
-from typing import Tuple, Dict
-
-"""
-Function to process images
-
-TODO: change function to take in array rather than image object for clearer function calls with less assumptions
-"""
+import json
+import time
+import matplotlib.pyplot as plt
+from typing import Tuple, Dict, List
 
 clip_low = 0.01
 scale_red = 1.0
@@ -19,13 +16,171 @@ gamma = 2
 
 
 class ImProcessor():
+    """
+    Class that handles image processing
 
-    def process_image(self, image: Image):
+    Example usage:
+        processor = ImProcessor()
+        img = Image("./path/to/image")
+        processed_img = processor.process_image(img)
+    """
+
+    def __init__(self, params_path: str):
         """
-        Function to process image. This funciton modifies the image object in place.
-        :param image: np.array, image to process
+        :param params_path: str, path to json file where image processing parameters are stored
         """
-        # Don't understand what this is
+        with open(params_path, 'r') as f:
+            self.params = json.load(f)
+
+        print(self.params)
+
+    def process_images(self, img_paths: List[str], output_dir: str, suf: str, find_offset_mode: bool = False, frame: Frame = Frame.SITE3, angles: str = 'opk', save_im: bool = True):
+        """
+        Processes a list of images
+        img_paths: list of paths to the images to be processed
+        output_dir: str, path to the output directory
+        suf: str, suffix used in the saved CSV file
+        find_offset_mode: indicate if offsets should be found. If so, save the offsets in a txt file
+        frame: str, frame of the image
+        angles: one of 'opk' or 'ypr' to indicate angle type to be returned
+        save_im: Indicates if the processed image should be saved
+        """
+        pos_lines = []
+        error_lines = []
+        veh_XYZs = []
+        im_XYZs = []
+        veh_azs = []
+        im_azs = []
+        im_els = []
+        sols = []
+        rmcs = []
+
+        print(f"Number of images: {len(img_paths)}")
+
+        for i, img_path in enumerate(img_paths):
+            try:
+                img = Image(img_path, frame=frame)
+                print(f"{i} opened {os.path.basename(img_path)}")
+                IMG_loaded = True
+
+            except:
+                print(f"{os.path.basename(img_path)} failed to process!", end='\n\n')
+                error_lines.append(os.path.basename(img_path)+'\n')
+                IMG_loaded = False
+
+            if IMG_loaded:
+                # color processing parameters
+                scale_scale = self.params['scales']['scale_scale']
+                img.clip_low = self.params['clip_low']
+                img.gamma = self.params['gamma']
+                img.pad_im = self.params['pad_im']
+                img.save_im = save_im
+                img.save_mask = self.params['save_mask']
+                img.find_offset_mode = find_offset_mode
+
+                match img.cam_type:
+                    case Camera.ZCAM_LEFT | Camera.ZCAM_RIGHT:
+                        scales = self.params['scales']['zcam']
+                        img.clip_low = self.params['clip_low_z']
+                        img.pad_im = self.params['pad_im_z']
+
+                    case Camera.SHERLOC:
+                        scales = self.params['scales']['sherloc']
+                        img.clip_low = 0.0
+
+                    case Camera.RMI:
+                        scales = self.params['scales']['rmi']
+
+                    case Camera.NAVCAM:
+                        scales = self.params['scales']['navcam']
+
+                    case Camera.NAVCAM_VCE:
+                        scales = self.params['scales']['navcam_vce']
+                        img.clip_low = 0.0
+                        img.gamma = 1.0
+
+                    case Camera.HAZCAM_FRONT:
+                        scales = self.params['scales']['hazcam_front']
+                        img.clip_low = img.clip_low/2
+
+                    case Camera.HAZCAM_REAR:
+                        scales = self.params['scales']['hazcam_rear']
+                        img.clip_low = img.clip_low/2
+
+                    case Camera.HSF:
+                        scales = self.params['scales']['hsf']
+
+                    case Camera.HNM:
+                        scales = self.params['scales']['hnm']
+                        img.clip_low = 0.3
+                        img.gamma = 1.0
+
+                img.scale = scales['scale_factor'] * scale_scale
+                img.scale_red = scales['scale_red']
+                img.scale_blue = scales['scale_blue']
+
+                file_extension = self.params['file_extension']
+
+                img.focus_mc = -1
+                img.zoom_mc = -1
+
+                # create save directory
+                img.save_path_full = self.make_save_path(
+                    img.IMG_path, output_dir, fullpath=True, file_extension=file_extension)
+                img.save_path = self.make_save_path(
+                    img.IMG_path, output_dir, fullpath=False)
+                img.save_name = img.save_path_full.split('/')[-1]
+                csv_save_path = img.save_path_full
+
+                # process and save image
+                if img.save_im:
+                    img = self.process_image(img, img.scale, img.scale_red,
+                                             img.scale_blue, img.clip_low, img.gamma)
+                    if img.save_mask:
+                        img.im8a = cv2.cvtColor(img.im8, cv2.COLOR_BGR2RGBA)
+                        img.im8a[:, :, 3] = img.mask_image
+                        cv2.imwrite(img.save_path_full, img.im8a)
+                    else:
+                        cv2.imwrite(img.save_path_full, img.im8[:, :, ::-1])
+
+                # TODO: ADD CMOD Implementation
+
+        csv_save_path = os.path.dirname(
+            csv_save_path)+'/positions_'+suf+'_'+str(frame)+'_' +\
+            time.strftime("%Y%m%d-%H%M%S") + '.txt'
+        with open(csv_save_path, 'w') as file:
+            for pos_line in pos_lines:
+                file.write(pos_line)
+
+        print(f"saved {csv_save_path}")
+
+        self.plot_image_locations(img_paths, im_XYZs, veh_XYZs,
+                                  veh_azs, im_azs, im_els)
+
+        if find_offset_mode:
+            sites = [rmcs[i][0] for i in range(len(rmcs))[::-1]]
+            drives = [rmcs[i][1] for i in range(len(rmcs))[::-1]]
+            Xs = [veh_XYZs[i][0] for i in range(len(veh_XYZs))[::-1]]
+            Ys = [veh_XYZs[i][1] for i in range(len(veh_XYZs))[::-1]]
+            Zs = [veh_XYZs[i][2] for i in range(len(veh_XYZs))[::-1]]
+
+            table = np.stack([sols[::-1], sites, drives, Xs, Ys, Zs], axis=1)
+            np.round(table, 4)
+
+            np.savetxt(output_dir+"/offsets_" +
+                       suf+".csv", table, delimiter="\t")
+
+    def process_image(self, image: Image, scale: float, scale_red: float, scale_blue: float, clip_low: float, gamma: float) -> Image:
+        """
+        Function to process a single image
+        :param image: Image, image object to be processed
+        :param scale: float, scale value
+        :param scale_red: float, red scale value
+        :param scale_blue: float, blue scale value
+        :param clip_low: float, lower bound value for use in clipping
+        :param gamma: float, gamma value for color correction
+        :return: Image, processed image object
+        """
         if image.filename.split('_N')[0][-3:] == 'RZS':
             ftau = np.float32(
                 image.label['DERIVED_IMAGE_PARMS']['RAD_ZENITH_SCALING_FACTOR'])
@@ -49,6 +204,8 @@ class ImProcessor():
                                                image.cam_type, image.filename)
             if any([pad != 0 for pad in paddings]):
                 image.proc_image = self._pad_image(image.proc_image, paddings)
+        else:
+            paddings = [0, 0, 0, 0]
 
         # create image mask
         mask_image = self._make_image_mask(
@@ -71,6 +228,8 @@ class ImProcessor():
 
         # rescale image to 8 unsigned bits
         image.im8 = np.clip(255*image.proc_image, 0, 255).astype('uint8')
+
+        return image
 
     def _single_to_triple_channels(self, im_arr: np.array, cam_type: Camera) -> np.array:
         """
@@ -187,6 +346,11 @@ class ImProcessor():
                     pad_top = np.min(tile_first_line) - 1
                     pad_bottom = np.max(
                         full_h - np.max(tile_first_line) - 960 + 1, 0)
+
+        pad_left = max(0, pad_left)
+        pad_right = max(0, pad_right)
+        pad_top = max(0, pad_top)
+        pad_bottom = max(0, pad_bottom)
 
         return pad_left, pad_right, pad_top, pad_bottom
 
@@ -371,3 +535,104 @@ class ImProcessor():
             proc_image_ = proc_image_**(1 / gamma)
 
         return proc_image_
+
+    def make_save_path(self, IMG_path, directory_output, fullpath=True, file_extension='.png'):
+        """
+        make_save_path sorts the images into an output directory organized by camera type and each 100 sols of the mission
+        """
+
+        filename = os.path.basename(IMG_path)
+        sol = int(filename[4:8])
+        camera = filename[0]
+        mission = 'Mars2020'  # mission name is hardcoded for now
+
+        if camera in ['F', 'N', 'R']:
+            camera_type = 'eng'
+        elif camera in ['H']:
+            camera_type = 'heli'
+        elif camera in ['Z', 'L', 'S']:
+            camera_type = 'sci'
+
+        sol_floor_100 = int(np.floor(sol/100) * 100)
+        sol_range_100 = str(sol_floor_100).zfill(4) + '-' + \
+            str(sol_floor_100).zfill(4)[:2] + '99'
+
+        save_path = directory_output + '/sols_' + sol_range_100 + '_' + camera_type
+
+        if not os.path.exists(save_path):
+            # Create a new directory because it does not exist
+            os.makedirs(save_path)
+            print("The new directory is created: ", save_path)
+
+        if fullpath:
+            return save_path + '/' + filename.split('.')[0] + file_extension
+        else:
+            return save_path
+
+    def plot_image_locations(self, IMG_paths, im_xyzs, rover_xyzs, rover_rots, im_azs, im_els):
+        '''
+        plot_image_locations displays the Northing vs Easting locations of each image and rover position
+
+        future work: replace the input arrays with a single pandas dataframe
+        '''
+
+        plt.figure(figsize=[12, 8])
+
+        scale = np.round(np.std(np.array(rover_xyzs), axis=0).max()/4+1)
+
+        for i in range(len(im_xyzs)):
+
+            filename = os.path.basename(IMG_paths[i])
+
+            marker = '*k'
+            if filename[:2] in ['FL', 'RL']:
+                marker = 'ob'
+            if filename[:2] in ['FR', 'RR']:
+                marker = 'or'
+            if filename[:2] == 'NL':
+                marker = 'sb'
+            if filename[:2] == 'NR':
+                marker = 'sr'
+            if filename[:2] == 'ZL':
+                marker = '^b'
+            if filename[:2] == 'ZR':
+                marker = '^r'
+
+            if 'MV' not in IMG_paths[i]:
+
+                plt.plot(rover_xyzs[i][0], rover_xyzs[i][1], color='k',    marker=(
+                    4, 0, 45 + rover_rots[i]), ms=30, )
+                plt.plot(rover_xyzs[i][0], rover_xyzs[i][1], color='gray', marker=(
+                    3, 0, 120 + rover_rots[i]), ms=20, )
+
+                sol = os.path.basename(IMG_paths[i])[4:8]
+                if i > 1:
+                    if sol != os.path.basename(IMG_paths[i-1])[4:8]:
+                        plt.text(rover_xyzs[i][0]+scale/4, rover_xyzs[i][1]+scale/4, 'Sol ' + sol,
+                                 bbox=dict(facecolor='w', alpha=0.5, edgecolor='w'), size='large')
+
+                if i > 1 and os.path.basename(IMG_paths[i])[:2] == 'NLF_':
+                    plt.plot([rover_xyzs[i][0], rover_xyzs[i][1]], [
+                        rover_xyzs[i][0], rover_xyzs[i][1]], '--', color='gray')
+
+                cos_az = np.cos(im_azs[i]/57.3)
+                sin_az = np.sin(im_azs[i]/57.3)
+                cos_el = np.cos(im_els[i]/57.3)
+
+                if os.path.basename(IMG_paths[i])[0] == 'Z':
+                    plt.arrow(im_xyzs[i][0], im_xyzs[i][1], scale*cos_el*sin_az, scale*cos_el*cos_az,
+                              color=marker[1], lw=int(scale/32), linestyle='dashed')
+                else:
+                    plt.arrow(im_xyzs[i][0], im_xyzs[i][1], scale*cos_el*sin_az, scale*cos_el*cos_az,
+                              color=marker[1], lw=int(scale/32))
+
+            plt.plot(im_xyzs[i][0], im_xyzs[i][1], marker)
+
+        plt.axis('equal')
+        plt.xlim([np.round(plt.gca().get_xlim()[0])-3,
+                  np.round(plt.gca().get_xlim()[1])+3])
+        plt.ylim([np.round(plt.gca().get_ylim()[0])-3,
+                  np.round(plt.gca().get_ylim()[1])+3])
+
+        plt.xlabel('Easting Site Frame')
+        plt.ylabel('Northing Site Frame')
