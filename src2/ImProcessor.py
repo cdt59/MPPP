@@ -8,12 +8,6 @@ import time
 import matplotlib.pyplot as plt
 from typing import Tuple, Dict, List
 
-clip_low = 0.01
-scale_red = 1.0
-scale_blue = 1.0
-scale = 12
-gamma = 2
-
 
 class ImProcessor():
     """
@@ -31,8 +25,6 @@ class ImProcessor():
         """
         with open(params_path, 'r') as f:
             self.params = json.load(f)
-
-        print(self.params)
 
     def process_images(self, img_paths: List[str], output_dir: str, suf: str, find_offset_mode: bool = False, frame: Frame = Frame.SITE3, angles: str = 'opk', save_im: bool = True):
         """
