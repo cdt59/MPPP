@@ -59,11 +59,11 @@ class Image:
         if not just_label:
             self.image = np.float32(PDS3Image.open(IMG_path).image)
             self.proc_image = None
+            self.im8 = None
             self.mask_image = np.ones(
                 self.image.shape[:2])*255  # TODO: remove this!!
             self.scale = self.label['DERIVED_IMAGE_PARMS']['RADIANCE_SCALING_FACTOR'][0]
             self.image *= self.scale
-
             self.pad_im = False
 
         self.find_offset_mode = None
