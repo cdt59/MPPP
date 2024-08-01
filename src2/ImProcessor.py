@@ -51,6 +51,8 @@ class ImProcessor():
         print(f"Number of images: {len(img_paths)}")
 
         for i, img_path in enumerate(img_paths):
+            print(img_path)
+            print(os.path.isfile(img_path))
             try:
                 img = Image(img_path, frame=frame)
                 print(f"{i} opened {os.path.basename(img_path)}")
@@ -137,21 +139,30 @@ class ImProcessor():
                         cv2.imwrite(img.save_path_full, img.im8[:, :, ::-1])
 
                 # TODO: ADD CMOD Implementation
+                # Metadata associated with the image
+                xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
+                    img.label, Frame.SITE)
 
-        csv_save_path = os.path.dirname(
-            csv_save_path)+'/positions_'+suf+'_'+str(frame)+'_' +\
+                save_csv_path = self.make_save_path(
+                    img.IMG_path, output_dir, fullpath=True, file_extension='.csv')
+
+                metadata = {"name": img.name,
+                            "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
+                            "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2],
+                            "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
+                            "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4]}
+                pos_lines.append(metadata)
+                pd.DataFrame([metadata]).to_csv(save_csv_path, index=False)
+
+                print(f"saved {csv_save_path}")
+
+        print(output_dir)
+        csv_save_path = os.path.dirname(save_csv_path) + '/positions_'+suf+'_'+str(frame)+'_' +\
             time.strftime("%Y%m%d-%H%M%S") + '.csv'
+        print(f"csv save path:{csv_save_path}")
+        pd.DataFrame(pos_lines).to_csv(csv_save_path, index=False)
 
-        # Metadata associated with the image
-        xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
-            img.label, Frame.SITE)
-        pd.DataFrame([{"name": img.IMG_path.split("/")[-1],
-                       "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
-                       "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2],
-                       "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
-                       "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4], }]).to_csv(csv_save_path, index=False)
-
-        print(f"saved {csv_save_path}")
+        print('saved', csv_save_path)
 
         self.plot_image_locations(img_paths, im_XYZs, veh_XYZs,
                                   veh_azs, im_azs, im_els)
