@@ -3,11 +3,7 @@ from planetaryimage import PDS3Image
 import numpy as np
 import os
 import pandas as pd
-
-
-class Frame(Enum):
-    SITE3 = 'site3'
-    RNAV = 'rnav'
+from src2.cmod import *
 
 
 class Camera(Enum):
@@ -34,7 +30,7 @@ class Image:
     Class that represents an image object.
     """
 
-    def __init__(self, IMG_path: str, just_label: bool = False, frame: Frame = Frame.SITE3):
+    def __init__(self, IMG_path: str, just_label: bool = False, frame: Frame = Frame.SITE):
         """
         Constructor for Image class.
 

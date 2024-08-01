@@ -1,4 +1,5 @@
-from src2.Image import Image, Camera, Frame
+from src2.Image import *
+from src2.cmod import *
 import os
 import cv2
 from colour_demosaicing import demosaicing_CFA_Bayer_Malvar2004
@@ -26,7 +27,7 @@ class ImProcessor():
         with open(params_path, 'r') as f:
             self.params = json.load(f)
 
-    def process_images(self, img_paths: List[str], output_dir: str, suf: str, find_offset_mode: bool = False, frame: Frame = Frame.SITE3, angles: str = 'opk', save_im: bool = True):
+    def process_images(self, img_paths: List[str], output_dir: str, suf: str, find_offset_mode: bool = False, frame: Frame = Frame.SITE, angles: str = 'opk', save_im: bool = True):
         """
         Processes a list of images
         img_paths: list of paths to the images to be processed
@@ -139,10 +140,16 @@ class ImProcessor():
 
         csv_save_path = os.path.dirname(
             csv_save_path)+'/positions_'+suf+'_'+str(frame)+'_' +\
-            time.strftime("%Y%m%d-%H%M%S") + '.txt'
-        with open(csv_save_path, 'w') as file:
-            for pos_line in pos_lines:
-                file.write(pos_line)
+            time.strftime("%Y%m%d-%H%M%S") + '.csv'
+
+        # Metadata associated with the image
+        xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
+            img.label, Frame.SITE)
+        pd.DataFrame([{"name": img.IMG_path.split("/")[-1],
+                       "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
+                       "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2],
+                       "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
+                       "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4], }]).to_csv(csv_save_path, index=False)
 
         print(f"saved {csv_save_path}")
 

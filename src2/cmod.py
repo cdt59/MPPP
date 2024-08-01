@@ -1,6 +1,12 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import requests
 from enum import Enum
+
+url = "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json"
+m20_waypoints_data = requests.get(url).json()
+m20_sitedrive2tr = {(feat["properties"]["site"], feat["properties"]["drive"]): np.array(
+    [feat["properties"]["northing"], feat["properties"]["easting"], -feat["properties"]["elev_geoid"]]) for feat in m20_waypoints_data["features"]}
 
 
 def q_wxyz2xyzw(q_wxyz):
@@ -216,6 +222,24 @@ def cahvor_transform(cahvor_a, R_ba, t_ba):
     return cahvor_b
 
 
+def get_t_s3r(site, drive):
+    """
+      Returns the translation t_s3r corresponding to the site and drive count
+    """
+    t_sr = m20_sitedrive2tr[(site, drive)] - m20_sitedrive2tr[(3, 0)]
+
+    return t_sr
+
+
+def get_t_sr(site, drive):
+    """
+      Returns the translation t_sr corresponding to the site and drive count
+    """
+    t_sr = m20_sitedrive2tr[(site, drive)] - m20_sitedrive2tr[(site, 0)]
+
+    return t_sr
+
+
 def Rt_enu(R_a, t_a):
     '''
     This takes north-east-down frame and returns a east-north-up frame
@@ -238,12 +262,10 @@ class Frame(Enum):
     CAMERA = 'camera'
     NAV = 'navigation'
     SITE = 'site'
-    NAV_E = 'navigation east'
-    SITE_E = 'site east'
-    ROVER_E = 'rover east'
 
 
-def create_cmod(label, frame: Frame = Frame.ROVER, cmod_version=1, cmod_format='cahvor'):
+def create_cmod(label, frame: Frame = Frame.ROVER, cmod_version=1,
+                site=3, drive=0):
 
     # return in a-frame, where "a"
 
@@ -287,11 +309,23 @@ def create_cmod(label, frame: Frame = Frame.ROVER, cmod_version=1, cmod_format='
             # R_rc, t_rc = find_Rt_rc( )
             R_, t = R_rc, t_rc
 
-        # TODO: how to find R_nc, t_nc?
         case Frame.NAV:
-            R_, t = np.eye(3), np.zeros(3)
+            t_nr = label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR']
+            q_nr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_nr = R.from_quat(q_nr).as_matrix()
 
-        # elif frame == 's':
+            R_, t = R_nr @ R_rc, R_nr @ t_rc + t_nr
+
+        case Frame.SITE:
+            # note: here we assume R_s3r = R_nr
+            q_sr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_sr = R.from_quat(q_sr).as_matrix()
+            t_sr = get_t_sr(drive, site)
+
+            R_ = R_sr @ R_rc
+            t = R_sr @  t_rc + t_sr
 
         case Frame.ROVER_E:
             # R_rc,  t_rc  = find_Rt_rc( )
@@ -299,33 +333,96 @@ def create_cmod(label, frame: Frame = Frame.ROVER, cmod_version=1, cmod_format='
             # cahvor_a
 
         case Frame.NAV_E:
-            raise NotImplementedError(
-                "Create CMOD for NAV_E is not implemented")
-            # R_nc,  t_nc  = find_Rt_nc( )
-            # R_nec, t_nec = Rt_enu( R_nc, t_nc )
-            # cahvor_a
+            t_nr = label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR']
+            q_nr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_nr = R.from_quat(q_nr).as_matrix()
+
+            R_, t = Rt_enu(R_nr @ R_rc, R_nr @ t_rc + t_nr)
 
         case Frame.SITE_E:
-            raise NotImplementedError(
-                "Create CMOD for SITE_E is not implemented")
-        #     R_sc,  t_sc  = find_Rt_sc( )
-        #     R_sec, t_sec = Rt_enu( R_sc, t_sc )
-        #     cahvor_a =
+            q_sr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_sr = R.from_quat(q_sr).as_matrix()
+            t_sr = get_t_sr(drive, site)
+
+            R_, t = Rt_enu(R_sr @ R_rc, R_sr @  t_rc + t_sr)
 
         case _:
             print("Invalid site")
 
-    # return cmod in requested format
-    if cmod_format == 'cahvor':
-        return cahvor_transform(cahvor_c, R, t)
+    return cahvor_transform(cahvor_c, R_, t)
 
-    if cmod_format == 'metashape':
-        cahvor_a = cahvor_transform(cahvor_c, R_, t)
-        xyz_ae = cahvor_xyz(cahvor_a)
-        opk_ae = cahvor_opk(R_)
-        intr_ae = cahvor_intr(cahvor_a)
-        dist_ae = cahvor_dist(cahvor_a)
 
-        return xyz_ae, opk_ae, intr_ae, dist_ae
+def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
 
-    # if cmod_format == 'realitycapture':
+    # model version
+    if cmod_version == 1:
+        # just calculate the cmod from values in label
+        cahvor_r = cahvor_from_pds(label['GEOMETRIC_CAMERA_MODEL'])
+
+    if cmod_version == 2:
+        raise NotImplementedError("Create CMOD for CMOD V2 is not implemented")
+
+    R_rc, t_rc = cahvor_Rt(cahvor_r)
+    R_cr = R_rc.T
+    t_cr = (-1 * R_rc.T @ np.expand_dims(t_rc, axis=1)).flatten()
+    cahvor_c = cahvor_transform(cahvor_r, R_cr, t_cr)
+    # find transform to requested frame
+    match(frame):
+        case Frame.CAMERA:
+            R_, t = np.eye(3), np.zeros(3)
+
+        case Frame.MAST:
+            # R_mc, t_mc = find_Rt_mc(  )
+            R_rm, t_rm = Rt_rm_from_pds(label)
+
+            T_rm = np.vstack([np.hstack([R_rm, t_rm]), np.array([0, 0, 0, 1])])
+            T_rc = np.vstack([np.hstack([R_rc, t_rc]), np.array([0, 0, 0, 1])])
+            T_mc = np.linalg.inv(T_rm) @ T_rc
+            R_, t = T_mc[:3, :3], T_mc[:3, 3]
+
+        case Frame.ROVER_P:
+            if cmod_version == 1:
+                R_, t = R_rc, t_rc
+
+            else:
+                raise NotImplementedError(
+                    "Create CMOD for CMOD V2 is not implemented")
+                # R_rpc, t_rpc = find_Rt_rpc( )
+                # cahvor_a
+
+        case Frame.ROVER:
+            # R_rc, t_rc = find_Rt_rc( )
+            R_, t = R_rc, t_rc
+
+        case Frame.NAV:
+            t_nr = label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR']
+            q_nr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_nr = R.from_quat(q_nr).as_matrix()
+
+            R_, t = R_nr @ R_rc, R_nr @ t_rc + t_nr
+
+        case Frame.SITE:
+            # note: here we assume R_s3r = R_nr
+            q_sr = q_wxyz2xyzw(
+                label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
+            R_sr = R.from_quat(q_sr).as_matrix()
+            site = label['ROVER_COORDINATE_SYSTEM']['COORDINATE_SYSTEM_INDEX'][0]
+            drive = label['ROVER_COORDINATE_SYSTEM']['COORDINATE_SYSTEM_INDEX'][1]
+            t_sr = get_t_s3r(site, drive)
+            R_ = R_sr @ R_rc
+            t = R_sr @  t_rc + t_sr
+
+        case _:
+            print("Invalid site")
+
+    R_enu, t_enu = Rt_enu(R_, t)
+    cahvor_a = cahvor_transform(cahvor_c, R_enu, t_enu)
+    xyz_ae = cahvor_xyz(cahvor_a)
+    opk_ae = cahvor_opk(R_enu)
+    intr_ae = cahvor_intr(cahvor_a)
+    dist_ae = cahvor_dist(cahvor_a)
+
+    return xyz_ae, opk_ae, intr_ae, dist_ae
