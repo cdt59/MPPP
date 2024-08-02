@@ -138,29 +138,30 @@ class ImProcessor():
                     else:
                         cv2.imwrite(img.save_path_full, img.im8[:, :, ::-1])
 
-                # TODO: ADD CMOD Implementation
+                # CMOD Processing
                 # Metadata associated with the image
                 xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
                     img.label, Frame.SITE)
 
-                save_csv_path = self.make_save_path(
+                im_save_csv_path = self.make_save_path(
                     img.IMG_path, output_dir, fullpath=True, file_extension='.csv')
 
-                metadata = {"name": img.name,
+                metadata = {"name": img.name + ".png",
                             "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
-                            "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2],
-                            "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
-                            "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4]}
+                            "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2]}
+                # "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
+                # "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4]}
                 pos_lines.append(metadata)
-                pd.DataFrame([metadata]).to_csv(save_csv_path, index=False)
+                pd.DataFrame([metadata]).to_csv(
+                    im_save_csv_path, sep="\t", index=False)
 
                 print(f"saved {csv_save_path}")
 
         print(output_dir)
-        csv_save_path = os.path.dirname(save_csv_path) + '/positions_'+suf+'_'+str(frame)+'_' +\
+        csv_save_path = os.path.dirname(im_save_csv_path) + '/positions_'+suf+'_'+str(frame)+'_' +\
             time.strftime("%Y%m%d-%H%M%S") + '.csv'
         print(f"csv save path:{csv_save_path}")
-        pd.DataFrame(pos_lines).to_csv(csv_save_path, index=False)
+        pd.DataFrame(pos_lines).to_csv(csv_save_path, sep="\t", index=False)
 
         print('saved', csv_save_path)
 
