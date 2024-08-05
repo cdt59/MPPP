@@ -7,6 +7,9 @@ url = "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json"
 m20_waypoints_data = requests.get(url).json()
 m20_sitedrive2tr = {(feat["properties"]["site"], feat["properties"]["drive"]): np.array(
     [feat["properties"]["northing"], feat["properties"]["easting"], -feat["properties"]["elev_geoid"]]) for feat in m20_waypoints_data["features"]}
+site2drive = {k[0]: [] for k in m20_sitedrive2tr.keys()}
+for k in m20_sitedrive2tr.keys():
+    site2drive[k[0]].append(k[1])
 
 
 def q_wxyz2xyzw(q_wxyz):
@@ -45,7 +48,7 @@ def Rt_rm_from_pds(cmod):
 
 def cahvor_H(cahvor):
     """
-    Returns a H vector given an 18 element cahvor vector 
+    Returns a H vector given an 18 element cahvor vector
     """
 
     a = cahvor[3: 6]
@@ -112,10 +115,10 @@ def cahvor_intr(cahvor):
     hp = (h - hc*a) / hs
     vp = (v - vc*a) / vs
 
-    theta = np.arcsin(np.linalg.norm(np.cross(vp, hp)))
+    theta = np.arcsin(np.clip(np.linalg.norm(
+        np.cross(vp, hp)), a_min=-1, a_max=1))
     if theta > 0:
         theta *= -1
-    # print( np.rad2deg(theta) )
 
     f = vs
     b1 = - hs * np.sin(theta) - vs
@@ -197,7 +200,6 @@ def cahvor_Rt(cahvor_a):
         Output: rotation matrix and offset vector from the camera-frame to a-frame, R_ac and t_ac
     '''
     K_c = cahvor_K(cahvor_a)
-
     H_c = K_c.T
     H_f = cahvor_H(cahvor_a)
     R_ac = H_f @ np.linalg.inv(H_c)
@@ -222,11 +224,17 @@ def cahvor_transform(cahvor_a, R_ba, t_ba):
     return cahvor_b
 
 
-def get_t_s3r(site, drive):
+def get_t_s3r(site, drive, label):
     """
       Returns the translation t_s3r corresponding to the site and drive count
     """
-    t_sr = m20_sitedrive2tr[(site, drive)] - m20_sitedrive2tr[(3, 0)]
+    # find the nearest drive count before and after
+
+    nav_t = label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR']
+    tr_curr = m20_sitedrive2tr[(site, 0)]
+    tr_s3 = m20_sitedrive2tr[(3, 0)]
+
+    t_sr = nav_t + tr_curr - tr_s3
 
     return t_sr
 
@@ -368,6 +376,7 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
     R_cr = R_rc.T
     t_cr = (-1 * R_rc.T @ np.expand_dims(t_rc, axis=1)).flatten()
     cahvor_c = cahvor_transform(cahvor_r, R_cr, t_cr)
+    # print(f"cahvor_c:{cahvor_c}")
     # find transform to requested frame
     match(frame):
         case Frame.CAMERA:
@@ -411,7 +420,8 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
             R_sr = R.from_quat(q_sr).as_matrix()
             site = label['ROVER_COORDINATE_SYSTEM']['COORDINATE_SYSTEM_INDEX'][0]
             drive = label['ROVER_COORDINATE_SYSTEM']['COORDINATE_SYSTEM_INDEX'][1]
-            t_sr = get_t_s3r(site, drive)
+            t_sr = get_t_s3r(site, drive, label)
+
             R_ = R_sr @ R_rc
             t = R_sr @  t_rc + t_sr
 
