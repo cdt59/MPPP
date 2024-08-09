@@ -167,6 +167,25 @@ def find_opk_from_R(R_mat):
     return np.array(opk)
 
 
+
+
+def find_R_from_opk(opk):
+    """
+    Converts rotation matrix to omega, phi and kappa angles
+    """
+    # # finds omega, phi, kappa from rotation matrix R_cam2site
+    # R_ = R.from_matrix(R_mat)
+    # R_enu2ned = R.from_matrix([[0, 1, 0], [1, 0, 0], [0, 0, -1]])
+    # angles = (R_enu2ned * R_).as_euler('XYZ', degrees=1)
+    # opk = [angles[0], angles[1], angles[2]+90]
+
+    opk_p = opk + np.array([0,0,-90])
+    R_p = R.from_euler('XYZ', opk+P, dregrees=1).as_matrix()
+    R_enu2ned = R.from_matrix([[0, 1, 0], [1, 0, 0], [0, 0, -1]])
+    R_mat  = R_enu2ned.T @ R_p
+
+    return R_mat
+
 def cahvor_opk(R_ac):
     return find_opk_from_R(R_ac)
 
@@ -403,7 +422,7 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
 
         case Frame.ROVER:
             # R_rc, t_rc = find_Rt_rc( )
-            R_, t = R_rc, t_rc
+            R_ac, t_ac = R_rc, t_rc
 
         case Frame.NAV:
             t_nr = label['ROVER_COORDINATE_SYSTEM']['ORIGIN_OFFSET_VECTOR']
@@ -428,11 +447,16 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
         case _:
             print("Invalid site")
 
-    R_enu, t_enu = Rt_enu(R_, t)
-    cahvor_a = cahvor_transform(cahvor_c, R_enu, t_enu)
-    xyz_ae = cahvor_xyz(cahvor_a)
-    opk_ae = cahvor_opk(R_enu)
-    intr_ae = cahvor_intr(cahvor_a)
-    dist_ae = cahvor_dist(cahvor_a)
+    R_aec, t_aec = Rt_enu(R_ac, t_ac)
+    cahvor_ae = cahvor_transform(cahvor_c, R_aec, t_aec )
+    xyz_ae = cahvor_xyz(cahvor_ae)
+    opk_ae = cahvor_opk(R_aec)
+    intr_ae = cahvor_intr(cahvor_ae)
+    dist_ae = cahvor_dist(cahvor_ae)
 
     return xyz_ae, opk_ae, intr_ae, dist_ae
+
+
+def interpret_output(xyz_ae, opk_ae, intr_ae, dist_ae, frame: Frame = Frame.ROVER, cmod_version=1):
+
+    return cahvor_a

@@ -51,117 +51,118 @@ class ImProcessor():
         print(f"Number of images: {len(img_paths)}")
 
         for i, img_path in enumerate(img_paths):
-            print(img_path)
-            print(os.path.isfile(img_path))
             try:
-                img = Image(img_path, frame=frame)
-                print(f"{i} opened {os.path.basename(img_path)}")
-                IMG_loaded = True
+                try:
+                    img = Image(img_path, frame=frame)
+                    print(f"{i} opened {os.path.basename(img_path)}")
+                    IMG_loaded = True
 
+                except:
+                    print(f"{os.path.basename(img_path)} failed to process!", end='\n\n')
+                    error_lines.append(os.path.basename(img_path)+'\n')
+                    IMG_loaded = False
+
+                if IMG_loaded:
+                    # color processing parameters
+                    scale_scale = self.params['scales']['scale_scale']
+                    img.clip_low = self.params['clip_low']
+                    img.gamma = self.params['gamma']
+                    img.pad_im = self.params['pad_im']
+                    img.save_im = save_im
+                    img.save_mask = self.params['save_mask']
+                    img.find_offset_mode = find_offset_mode
+
+                    match img.cam_type:
+                        case Camera.ZCAM_LEFT | Camera.ZCAM_RIGHT:
+                            scales = self.params['scales']['zcam']
+                            img.clip_low = self.params['clip_low_z']
+                            img.pad_im = self.params['pad_im_z']
+
+                        case Camera.SHERLOC:
+                            scales = self.params['scales']['sherloc']
+                            img.clip_low = 0.0
+
+                        case Camera.RMI:
+                            scales = self.params['scales']['rmi']
+
+                        case Camera.NAVCAM:
+                            scales = self.params['scales']['navcam']
+
+                        case Camera.NAVCAM_VCE:
+                            scales = self.params['scales']['navcam_vce']
+                            img.clip_low = 0.0
+                            img.gamma = 1.0
+
+                        case Camera.HAZCAM_FRONT:
+                            scales = self.params['scales']['hazcam_front']
+                            img.clip_low = img.clip_low/2
+
+                        case Camera.HAZCAM_REAR:
+                            scales = self.params['scales']['hazcam_rear']
+                            img.clip_low = img.clip_low/2
+
+                        case Camera.HSF:
+                            scales = self.params['scales']['hsf']
+
+                        case Camera.HNM:
+                            scales = self.params['scales']['hnm']
+                            img.clip_low = 0.3
+                            img.gamma = 1.0
+
+                    img.scale = scales['scale_factor'] * scale_scale
+                    img.scale_red = scales['scale_red']
+                    img.scale_blue = scales['scale_blue']
+
+                    file_extension = self.params['file_extension']
+
+                    img.focus_mc = -1
+                    img.zoom_mc = -1
+
+                    # create save directory
+                    img.save_path_full = self.make_save_path(
+                        img.IMG_path, output_dir, fullpath=True, file_extension=file_extension)
+                    img.save_path = self.make_save_path(
+                        img.IMG_path, output_dir, fullpath=False)
+                    img.save_name = img.save_path_full.split('/')[-1]
+                    csv_save_path = img.save_path_full
+
+                    # process and save image
+                    if img.save_im:
+                        img = self.process_image(img, img.scale, img.scale_red,
+                                                img.scale_blue, img.clip_low, img.gamma)
+                        if img.save_mask:
+                            img.im8a = cv2.cvtColor(img.im8, cv2.COLOR_BGR2RGBA)
+                            img.im8a[:, :, 3] = img.mask_image
+                            cv2.imwrite(img.save_path_full, img.im8a)
+                        else:
+                            cv2.imwrite(img.save_path_full, img.im8[:, :, ::-1])
+
+                    # CMOD Processing
+                    # Metadata associated with the image
+                    xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
+                        img.label, Frame.SITE)
+
+                    im_save_csv_path = self.make_save_path(
+                        img.IMG_path, output_dir, fullpath=True, file_extension='.csv')
+
+                    metadata = {"name": img.name + ".png",
+                                "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
+                                "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2]}
+                    # "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
+                    # "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4]}
+                    pos_lines.append(metadata)
+                    pd.DataFrame([metadata]).to_csv(
+                        im_save_csv_path, sep=",", index=False)
+
+                    print(f"saved {csv_save_path}")
             except:
-                print(f"{os.path.basename(img_path)} failed to process!", end='\n\n')
-                error_lines.append(os.path.basename(img_path)+'\n')
-                IMG_loaded = False
-
-            if IMG_loaded:
-                # color processing parameters
-                scale_scale = self.params['scales']['scale_scale']
-                img.clip_low = self.params['clip_low']
-                img.gamma = self.params['gamma']
-                img.pad_im = self.params['pad_im']
-                img.save_im = save_im
-                img.save_mask = self.params['save_mask']
-                img.find_offset_mode = find_offset_mode
-
-                match img.cam_type:
-                    case Camera.ZCAM_LEFT | Camera.ZCAM_RIGHT:
-                        scales = self.params['scales']['zcam']
-                        img.clip_low = self.params['clip_low_z']
-                        img.pad_im = self.params['pad_im_z']
-
-                    case Camera.SHERLOC:
-                        scales = self.params['scales']['sherloc']
-                        img.clip_low = 0.0
-
-                    case Camera.RMI:
-                        scales = self.params['scales']['rmi']
-
-                    case Camera.NAVCAM:
-                        scales = self.params['scales']['navcam']
-
-                    case Camera.NAVCAM_VCE:
-                        scales = self.params['scales']['navcam_vce']
-                        img.clip_low = 0.0
-                        img.gamma = 1.0
-
-                    case Camera.HAZCAM_FRONT:
-                        scales = self.params['scales']['hazcam_front']
-                        img.clip_low = img.clip_low/2
-
-                    case Camera.HAZCAM_REAR:
-                        scales = self.params['scales']['hazcam_rear']
-                        img.clip_low = img.clip_low/2
-
-                    case Camera.HSF:
-                        scales = self.params['scales']['hsf']
-
-                    case Camera.HNM:
-                        scales = self.params['scales']['hnm']
-                        img.clip_low = 0.3
-                        img.gamma = 1.0
-
-                img.scale = scales['scale_factor'] * scale_scale
-                img.scale_red = scales['scale_red']
-                img.scale_blue = scales['scale_blue']
-
-                file_extension = self.params['file_extension']
-
-                img.focus_mc = -1
-                img.zoom_mc = -1
-
-                # create save directory
-                img.save_path_full = self.make_save_path(
-                    img.IMG_path, output_dir, fullpath=True, file_extension=file_extension)
-                img.save_path = self.make_save_path(
-                    img.IMG_path, output_dir, fullpath=False)
-                img.save_name = img.save_path_full.split('/')[-1]
-                csv_save_path = img.save_path_full
-
-                # process and save image
-                if img.save_im:
-                    img = self.process_image(img, img.scale, img.scale_red,
-                                             img.scale_blue, img.clip_low, img.gamma)
-                    if img.save_mask:
-                        img.im8a = cv2.cvtColor(img.im8, cv2.COLOR_BGR2RGBA)
-                        img.im8a[:, :, 3] = img.mask_image
-                        cv2.imwrite(img.save_path_full, img.im8a)
-                    else:
-                        cv2.imwrite(img.save_path_full, img.im8[:, :, ::-1])
-
-                # CMOD Processing
-                # Metadata associated with the image
-                xyz_ae, opk_ae, intr_ae, dist_ae = create_output(
-                    img.label, Frame.SITE)
-
-                im_save_csv_path = self.make_save_path(
-                    img.IMG_path, output_dir, fullpath=True, file_extension='.csv')
-
-                metadata = {"name": img.name + ".png",
-                            "x": xyz_ae[0], "y": xyz_ae[1], "z": xyz_ae[2],
-                            "o": opk_ae[0], "p": opk_ae[1], "k": opk_ae[2]}
-                # "f": intr_ae[0], "b1": intr_ae[1], "b2": intr_ae[2], "cx": intr_ae[3], "cy": intr_ae[0],
-                # "k1": dist_ae[0], "k2": dist_ae[1], "k3": dist_ae[2], "p1": dist_ae[3], "p2": dist_ae[4]}
-                pos_lines.append(metadata)
-                pd.DataFrame([metadata]).to_csv(
-                    im_save_csv_path, sep="\t", index=False)
-
-                print(f"saved {csv_save_path}")
+                print(f"Failed to process {img_path}")
 
         print(output_dir)
         csv_save_path = os.path.dirname(im_save_csv_path) + '/positions_'+suf+'_'+str(frame)+'_' +\
             time.strftime("%Y%m%d-%H%M%S") + '.csv'
         print(f"csv save path:{csv_save_path}")
-        pd.DataFrame(pos_lines).to_csv(csv_save_path, sep="\t", index=False)
+        pd.DataFrame(pos_lines).to_csv(csv_save_path, sep=",", index=False)
 
         print('saved', csv_save_path)
 
@@ -363,6 +364,7 @@ class ImProcessor():
         pad_top = max(0, pad_top)
         pad_bottom = max(0, pad_bottom)
 
+
         return pad_left, pad_right, pad_top, pad_bottom
 
     def _pad_image(self, im_: np.array, paddings: Tuple) -> np.array:
@@ -481,7 +483,7 @@ class ImProcessor():
                     downsample = int(im_fname.split('_')[-1][3])
                 except:
                     print(
-                        f"Error in downsample informaiton for filename:{im_fname}")
+                        f"Error in downsample information for filename:{im_fname}")
                     exit()
 
                 parent_path = os.getcwd()
@@ -493,6 +495,7 @@ class ImProcessor():
                         parent_path, 'params/FR{}.jpg'.format(downsample))
 
                 mask = cv2.imread(mask_path)
+
                 pro_mask[mask[:, :, 0] < 100] = 0
 
             if 'MV' in im_fname or 'M_' in im_fname:

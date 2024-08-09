@@ -3,11 +3,11 @@
   "save_mask": true,
   "pad_im": true,
   "pad_im_z": true,
-  "gamma": 2,
+  "gamma": 1.5,
   "clip_low_z": 0.01,
   "clip_low": 0.05,
   "scales": {
-    "scale_scale": 12,
+    "scale_scale": 16,
     "zcam": {
       "scale_factor": 1,
       "scale_red": 0.7,
