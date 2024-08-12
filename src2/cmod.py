@@ -399,7 +399,7 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
     # find transform to requested frame
     match(frame):
         case Frame.CAMERA:
-            R_, t = np.eye(3), np.zeros(3)
+            R_ac, t_ac = np.eye(3), np.zeros(3)
 
         case Frame.MAST:
             # R_mc, t_mc = find_Rt_mc(  )
@@ -408,11 +408,11 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
             T_rm = np.vstack([np.hstack([R_rm, t_rm]), np.array([0, 0, 0, 1])])
             T_rc = np.vstack([np.hstack([R_rc, t_rc]), np.array([0, 0, 0, 1])])
             T_mc = np.linalg.inv(T_rm) @ T_rc
-            R_, t = T_mc[:3, :3], T_mc[:3, 3]
+            R_ac, t_ac = T_mc[:3, :3], T_mc[:3, 3]
 
         case Frame.ROVER_P:
             if cmod_version == 1:
-                R_, t = R_rc, t_rc
+                R_ac, t_ac = R_rc, t_rc
 
             else:
                 raise NotImplementedError(
@@ -430,7 +430,7 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
                 label['ROVER_COORDINATE_SYSTEM']['ORIGIN_ROTATION_QUATERNION'])
             R_nr = R.from_quat(q_nr).as_matrix()
 
-            R_, t = R_nr @ R_rc, R_nr @ t_rc + t_nr
+            R_ac, t_ac = R_nr @ R_rc, R_nr @ t_rc + t_nr
 
         case Frame.SITE:
             # note: here we assume R_s3r = R_nr
@@ -441,8 +441,8 @@ def create_output(label, frame: Frame = Frame.ROVER, cmod_version=1):
             drive = label['ROVER_COORDINATE_SYSTEM']['COORDINATE_SYSTEM_INDEX'][1]
             t_sr = get_t_s3r(site, drive, label)
 
-            R_ = R_sr @ R_rc
-            t = R_sr @  t_rc + t_sr
+            R_ac = R_sr @ R_rc
+            t_ac = R_sr @  t_rc + t_sr
 
         case _:
             print("Invalid site")
